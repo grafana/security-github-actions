@@ -2,19 +2,19 @@ name: syft-sbom-ci
 
 on:
   release:
-  types: [published]
+    types: [published]
   workflow_dispatch:
 
 jobs:
-  snyk_scans:
+  syft-sbom:
 
     runs-on: ubuntu-latest
 
     steps:
-
+    - name: Checkout
+      uses: actions/checkout@v2
+        
     - name: Anchore SBOM Action
       uses: anchore/sbom-action@v0.12.0
-
-    - uses: anchore/sbom-action/publish-sbom@v0
       with:
-        sbom-artifact-match: ".*\\.spdx$"
+         artifact-name: ${{ github.event.repository.name }}-spdx.json
