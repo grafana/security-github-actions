@@ -2,7 +2,8 @@ name: syft-sbom-ci
 
 on:
   release:
-  types: [published] 
+  types: [published]
+  workflow_dispatch:
 
 jobs:
   snyk_scans:
