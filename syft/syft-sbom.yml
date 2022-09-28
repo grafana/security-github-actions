@@ -1,0 +1,19 @@
+name: syft-sbom-ci
+
+on:
+  release:
+  types: [published] 
+
+jobs:
+  snyk_scans:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Anchore SBOM Action
+      uses: anchore/sbom-action@v0.12.0
+
+    - uses: anchore/sbom-action/publish-sbom@v0
+      with:
+        sbom-artifact-match: ".*\\.spdx$"
