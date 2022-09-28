@@ -1,10 +1,8 @@
 name: snyk-monitor-ci
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  release:
+  types: [published] 
 
 jobs:
   snyk_scans:
