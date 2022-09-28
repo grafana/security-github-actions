@@ -3,6 +3,7 @@ name: snyk-sbom-ci
 on:
   release:
   types: [published] 
+  workflow_dispatch:
 
 jobs:
   snyk_scans:
