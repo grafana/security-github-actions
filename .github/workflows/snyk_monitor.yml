@@ -2,6 +2,9 @@ name: snyk-monitor-ci
 
 on:
   workflow_call:
+    secrets:
+      SNYK_TOKEN:
+        required: true
 jobs:
   snyk_scans:
 
