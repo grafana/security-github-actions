@@ -1,0 +1,26 @@
+name: snyk-monitor-ci
+
+on:
+  workflow_call:
+jobs:
+  snyk_scans:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Snyk to import ${{ github.event.repository.name }} to Snyk
+        continue-on-error: true
+        uses: snyk/actions/golang@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: monitor
+          args:  snyk monitor --strict-out-of-sync=false --all-projects --tags=repo=${{ github.event.repository.name }}
+
+
+
+
+
+
+
