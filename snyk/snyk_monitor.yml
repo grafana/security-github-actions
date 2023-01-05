@@ -22,4 +22,4 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: monitor
-          args:  snyk monitor --strict-out-of-sync=false --all-projects --tags=repo=${{ github.event.repository.name }}
+          args:  snyk monitor --strict-out-of-sync=false --all-projects --exclude=".yarn" --tags=repo=${{ github.event.repository.name }}
