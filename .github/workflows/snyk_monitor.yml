@@ -19,7 +19,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: monitor
-          args:  --strict-out-of-sync=false --all-projects --tags=repo=${{ github.event.repository.name }}
+          args:  --strict-out-of-sync=false --all-projects --exclude=Dockerfile,devenv --tags=repo=${{ github.event.repository.name }}
 
 
 
