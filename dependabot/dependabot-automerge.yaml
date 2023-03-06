@@ -1,15 +1,16 @@
 name: Dependabot auto merger
 
-on: pull_request_target
+on:
+  workflow_call:
+    inputs:
+      packages-minor-autoupdate:
+        description: An array of packages to automerge
+        default: []
+        required: false
 
 permissions:
   pull-requests: write
   contents: write
-
-inputs:
-  packages-minor-autoupdate:
-    description: An array of packages to automerge
-    default: []
 
 jobs:
   review-dependabot-pr:
