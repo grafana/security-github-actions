@@ -5,8 +5,9 @@ on:
     inputs:
       packages-minor-autoupdate:
         description: An array of packages to automerge
-        default: []
+        default: "[]"
         required: false
+        type: string
 
 permissions:
   pull-requests: write
