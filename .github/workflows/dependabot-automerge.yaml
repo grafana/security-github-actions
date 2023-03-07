@@ -44,7 +44,7 @@ jobs:
           gh pr comment $PR_URL --body "**Not approving**, includes a **major** update of a dependency used in **production**"
           gh pr edit $PR_URL --add-label "requires-manual-approval"
       - name: Approve and auto-merge minor updates for approved packages
-        if: contains(${{ fromJSON(inputs.python_matrix) }}), steps.metadata.outputs.dependency-names) && steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        if: contains(fromJSON( ${{ inputs.python_matrix }}), steps.metadata.outputs.dependency-names) && steps.metadata.outputs.update-type == 'version-update:semver-minor'
         run: gh pr review $PR_URL --approve -b "**Approving**  it includes **a minor** update for **approved to merge** package"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
