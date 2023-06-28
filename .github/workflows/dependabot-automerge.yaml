@@ -17,35 +17,31 @@ jobs:
   review-dependabot-pr:
     runs-on: ubuntu-latest
     if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+    env:
+      PR_URL: ${{github.event.pull_request.html_url}}
+      GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
     steps:
       - name: Dependabot metadata
         id: dependabot-metadata
-        uses: dependabot/fetch-metadata@v1.3.1
+        uses: dependabot/fetch-metadata@v1.5.1
       - name: Enable auto-merge for Dependabot PRs
         run: gh pr merge --auto --merge "$PR_URL"
-        env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
       - name: Approve patch updates
-        if: ${{steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' }}
-        run: gh pr review $PR_URL --approve -b "**Approving**  it includes **a patch** update"
-        env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        if: ${{ steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' }}
+        run: gh pr review $PR_URL --approve -b "**Approving** patch update"
       - name: Approve minor updates of development dependencies
-        if: ${{steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' && steps.dependabot-metadata.outputs.dependency-type == 'direct:development'}}
-        run: gh pr review $PR_URL --approve -b "I'm **approving** this pull request because **it includes a minor update of a dependency used only in development**"
-        env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-      - name: Comment on major updates of non-development dependencies
-        if: ${{steps.dependabot-metadata.outputs.update-type == 'version-update:semver-major' && steps.dependabot-metadata.outputs.dependency-type == 'direct:production'}}
+        if: ${{ steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' && steps.dependabot-metadata.outputs.dependency-type == 'direct:development'}}
+        run: gh pr review $PR_URL --approve -b "**Approving** minor update to a development dependency"
+      - name: Approve minor updates of allowlisted production dependencies
+        if: ${{ steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' && steps.dependabot-metadata.outputs.dependency-type == 'direct:production' && contains(fromJSON(inputs.packages-minor-autoupdate), steps.dependabot-metadata.outputs.dependency-names) }}
+        run: gh pr review $PR_URL --approve -b "**Approving** minor update to an allowlisted production dependency"
+      - name: Comment on minor updates of non-allowlisted production dependencies
+        if: ${{ steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' && steps.dependabot-metadata.outputs.dependency-type == 'direct:production' && !contains(fromJSON(inputs.packages-minor-autoupdate), steps.dependabot-metadata.outputs.dependency-names) }}
         run: |
-          gh pr comment $PR_URL --body "**Not approving**, includes a **major** update of a dependency used in **production**"
+          gh pr comment $PR_URL --body "**Not approving** minor update to a non-allowlisted production dependency"
           gh pr edit $PR_URL --add-label "requires-manual-approval"
-      - name: Approve and auto-merge minor updates for approved packages
-        if: contains(fromJSON( ${{ inputs.packages-minor-autoupdate }}), steps.metadata.outputs.dependency-names) && steps.metadata.outputs.update-type == 'version-update:semver-minor'
-        run: gh pr review $PR_URL --approve -b "**Approving**  it includes **a minor** update for **approved to merge** package"
-        env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      - name: Comment on major updates of production dependencies
+        if: ${{ steps.dependabot-metadata.outputs.update-type == 'version-update:semver-major' && steps.dependabot-metadata.outputs.dependency-type == 'direct:production' }}
+        run: |
+          gh pr comment $PR_URL --body "**Not approving** major update to a production dependency"
+          gh pr edit $PR_URL --add-label "requires-manual-approval"
