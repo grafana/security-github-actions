@@ -8,6 +8,10 @@ on:
         default: ""
         required: false
         type: string
+    secrets:
+      envPAT:
+        required: false
+
 
 permissions:
   pull-requests: write
@@ -19,7 +23,7 @@ jobs:
     if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
     env:
       PR_URL: ${{github.event.pull_request.html_url}}
-      GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      GITHUB_TOKEN: ${{secrets.envPAT || secrets.GITHUB_TOKEN}}
     steps:
       - name: Dependabot metadata
         id: dependabot-metadata
