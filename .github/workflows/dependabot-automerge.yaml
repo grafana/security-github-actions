@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Check Push Restrictions on Main Branch
         run: |
-          protection_url="/repos/${{ github.repository }}/branches/${{ github.head_ref }}"/protection"
+          protection_url="/repos/${{ github.repository }}/branches/${{ github.head_ref }}/protection"
           response=$(gh api "$protection_url")
           echo "Branch Protection: $response"
       - name: Generate token
