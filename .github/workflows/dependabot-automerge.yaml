@@ -11,8 +11,11 @@ on:
     secrets:
       envPAT:
         required: false
-
-
+      APP_ID:
+        required: false
+      APP_PRIVATE_KEY:
+        required: false
+      
 permissions:
   pull-requests: write
   contents: write
@@ -25,20 +28,6 @@ jobs:
       PR_URL: ${{github.event.pull_request.html_url}}
       GITHUB_TOKEN: ${{secrets.envPAT || secrets.GITHUB_TOKEN}}
     steps:
-      - name: Check Push Restrictions on Main Branch
-        id: check-branch-restrictions
-        run: |
-          protection_url="/repos/${{ github.repository }}/branches/${{ github.base_ref }}/protection"
-          response=$(gh api "$protection_url")
-          restrictions=$(echo "$response" | jq '.restrictions')
-          echo "Push Restrictions: $restrictions"
-          if [ "$restrictions" == "null" ]; then
-            echo "Push Restrictions are not set."
-            echo "restrictions_enabled=false" >> $GITHUB_OUTPUT
-          else
-            echo "Push Restrictions are set."
-            echo "restrictions_enabled=true" >> $GITHUB_OUTPUT
-          fi
       - name: Generate token
         if: steps.check-protections.outputs.restrictions_enabled == 'true'
         id: generate_token
