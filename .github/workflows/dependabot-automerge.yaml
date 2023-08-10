@@ -10,7 +10,7 @@ on:
         type: string
     secrets:
       APP_TOKEN:
-        required: false
+        required: true
       
 permissions:
   pull-requests: write
