@@ -8,6 +8,11 @@ on:
         default: ""
         required: false
         type: string
+      token:
+        description: The GITHUB_TOKEN to use
+        default: ""
+        required: false
+        type: string
     secrets:
       APP_TOKEN:
         required: true
@@ -22,7 +27,7 @@ jobs:
     if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
     env:
       PR_URL: ${{github.event.pull_request.html_url}}
-      GITHUB_TOKEN: ${{secrets.APP_TOKEN}}
+      GITHUB_TOKEN: ${{inputs.token || secrets.GITHUB_TOKEN}}
     steps:
       - name: Dependabot metadata
         id: dependabot-metadata
