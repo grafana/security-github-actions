@@ -27,13 +27,21 @@ jobs:
     if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
     env:
       PR_URL: ${{github.event.pull_request.html_url}}
-      GITHUB_TOKEN: ${{inputs.token || secrets.envPAT }}
+      GITHUB_TOKEN: ${{secrets.envPAT || secrets.GITHUB_TOKEN}}
     steps:
+      - name: Generate token
+        id: generate-token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.DEPENDABOTREVIEWER_ID }}
+          private_key: ${{ secrets.DEPENDABOTREVIEWER_PEM }}
       - name: Dependabot metadata
         id: dependabot-metadata
         uses: dependabot/fetch-metadata@v1.5.1
       - name: Enable auto-merge for Dependabot PRs
         run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token || secrets.envPAT || secrets.GITHUB_TOKEN}}
       - name: Approve patch updates
         if: ${{ steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' }}
         run: gh pr review $PR_URL --approve -b "**Approving** patch update"
