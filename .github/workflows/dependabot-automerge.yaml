@@ -36,7 +36,7 @@ jobs:
       - name: Enable auto-merge for Dependabot PRs
         run: gh pr merge --auto --merge "$PR_URL"
         env:
-          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token || secrets.envPAT || secrets.GITHUB_TOKEN}}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || secrets.envPAT || secrets.GITHUB_TOKEN}}
       - name: Approve patch updates
         if: ${{ steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' }}
         run: gh pr review $PR_URL --approve -b "**Approving** patch update"
