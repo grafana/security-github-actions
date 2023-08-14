@@ -12,9 +12,7 @@ on:
       envPAT:
         required: false
       
-permissions:
-  pull-requests: write
-  contents: write
+permissions: write-all
 
 jobs:
   review-dependabot-pr:
