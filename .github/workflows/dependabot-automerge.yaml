@@ -10,7 +10,7 @@ on:
         type: string
       repository-merge-method:
         description: The merge method to use (specify what is enabled for your repository out of merge, squash, or rebase)
-        default: "merge"
+        default: merge
         required: false
         type: string
     secrets:
