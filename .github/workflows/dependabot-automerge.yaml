@@ -8,10 +8,15 @@ on:
         default: ""
         required: false
         type: string
+      repository-merge-method:
+        description: The merge method to use (specify what is enabled for your repository out of merge, squash, or rebase)
+        default: merge
+        required: false
+        type: string
     secrets:
       envPAT:
         required: false
-      
+
 permissions:
   pull-requests: write
   contents: write
@@ -35,7 +40,7 @@ jobs:
         id: dependabot-metadata
         uses: dependabot/fetch-metadata@v1.5.1
       - name: Enable auto-merge for Dependabot PRs
-        run: gh pr merge --auto --merge "$PR_URL"
+        run: gh pr merge --auto --${{ inputs.repository-merge-method }} "$PR_URL"
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || secrets.envPAT || secrets.GITHUB_TOKEN}}
       - name: Approve patch updates
