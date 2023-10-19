@@ -1,0 +1,76 @@
+name: Renovate-Reviewer
+on:
+  workflow_call:
+    inputs:
+      repository-merge-method:
+        description: The merge method to use (specify what is enabled for your repository out of merge, squash, or rebase)
+        default: merge
+        required: false
+        type: string
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  review-renovate-pr:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.user.login == 'grafanarenovatebot[bot]' }}
+    env:
+      PR_URL: ${{github.event.pull_request.html_url}}
+      COMMITS_URL: ${{ github.event.pull_request.commits_url }}
+    steps:
+      - name: Generate token
+        id: generate-token
+        uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a #v2.1.0
+        with:
+          app_id: ${{ secrets.DEPENDABOTREVIEWER_ID }}
+          private_key: ${{ secrets.DEPENDABOTREVIEWER_PEM }}
+        
+      - name: Verify That Commits Are Signed
+        env:
+          GH_TOKEN: "${{ steps.generate-token.outputs.token }}" 
+        id: signed_commits
+        run: |
+          not_signed=""
+          not_signed="$(curl -s -H "Authorization: token $GH_TOKEN" "$COMMITS_URL" | jq '.[] | select(.commit.verification.verified == false) | .html_url' | wc -l)"
+          if [[ "$not_signed" -gt 0 ]]; then
+            gh pr comment $PR_URL -b "**NOT** approving this since some commits are not signed."
+            exit 1
+          fi
+          
+      - name: Check Single PR Author
+        env:
+          GH_TOKEN: "${{ steps.generate-token.outputs.token }}" 
+        if: success()  
+        id: check_pr_author
+        run: |
+          AUTHOR_COUNT=$(gh pr view $PR_URL --json commits --jq '.commits[].authors[].login' | uniq | wc -l)          
+          if [[ $AUTHOR_COUNT -gt 1 ]]; then
+            gh pr comment $PR_URL -b "**NOT** approving this since someone else has edit this PR."
+            exit 1
+          fi
+
+      - name: Enable auto-merge for Renovate PRs
+        if: success()
+        env:
+          GH_TOKEN: "${{ steps.generate-token.outputs.token }}" 
+        run: gh pr merge --auto --${{ inputs.repository-merge-method }} "$PR_URL"
+        
+      - name: Approve security updates
+        if: contains(github.event.pull_request.labels.*.name, 'automerge-security-update')
+        env:
+          GH_TOKEN: "${{ steps.generate-token.outputs.token }}"  
+        run: gh pr review $PR_URL --approve -b "**Approving** SECURITY update 🎉. Will now merge..."
+
+      - name: Approve patch updates
+        if: (contains(github.event.pull_request.labels.*.name, 'automerge-patch'))
+        env:
+          GH_TOKEN: "${{ steps.generate-token.outputs.token }}" 
+        run: gh pr review $PR_URL --approve -b "**Approving** PATCH update 🎉. Will now merge..."
+          
+      - name: Approve minor updates
+        if: (contains(github.event.pull_request.labels.*.name, 'automerge-minor'))
+        env:
+          GH_TOKEN: "${{ steps.generate-token.outputs.token }}"
+        run: gh pr review $PR_URL --approve -b "**Approving** MINOR update 🎉. Will now merge..."
