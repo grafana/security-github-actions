@@ -65,6 +65,11 @@ runs:
         BRANCH_NAME: ${{ github.head_ref || github.ref_name }} 
       run: |
         output=$(cat output.txt)
-        comment=$(echo -e "### New vulnerabilities introduced in branch $BRANCH_NAME compared to ${{ github.base_ref }}\n\n" ; jq -r '.[] | "* \(.VulnerabilityID), Severity: \(.Severity), Package: \(.PkgName), Installed: \(.InstalledVersion), Fixed: \(.FixedVersion // "N/A")"' output.txt)
-        gh pr comment ${{ github.event.pull_request.number }} --body "$comment"
+        if [ "$output" == "No new vulnerabilities found." ]; then
+          echo "No new vulnerabilities found."
+          exit 0
+        else
+          comment=$(echo -e "### New vulnerabilities introduced in branch $BRANCH_NAME compared to ${{ github.base_ref }}\n\n" ; jq -r '.[] | "* \(.VulnerabilityID), Severity: \(.Severity), Package: \(.PkgName), Installed: \(.InstalledVersion), Fixed: \(.FixedVersion // "N/A")"' output.txt)
+          gh pr comment ${{ github.event.pull_request.number }} --body "$comment"
+        fi
       shell: bash
