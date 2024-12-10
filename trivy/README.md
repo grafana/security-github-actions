@@ -27,7 +27,7 @@ jobs:
     
     steps:
       # Use the Trivy Diff reusable workflow
-      - uses: grafana/security-github-actions/trivy/trivy-diff.yml@trivy-diff
+      - uses: grafana/security-github-actions/trivy/@trivy-diff
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           severities: "CRITICAL,HIGH"
