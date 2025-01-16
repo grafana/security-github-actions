@@ -52,7 +52,11 @@ runs:
         format: json
         scan-ref: .
         severity: ${{ inputs.severities }}
-    
+        skip-setup-trivy: true
+      env:
+        TRIVY_SKIP_DB_UPDATE: true
+        TRIVY_SKIP_JAVA_DB_UPDATE: true
+        
     - name: "Run Trivy Diff"
       id: trivy-diff
       run: |
