@@ -18,8 +18,9 @@ runs:
         fetch-depth: 0
     
     - name: "Checkout Target Branch"
-      run: git checkout ${{ github.base_ref }}
-      shell: bash
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+      with:
+        ref: ${{ github.base_ref }}
     
     - name: "Scan Target Branch"
       uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # 0.29.0
@@ -35,9 +36,11 @@ runs:
         scan-ref: .
         severity: ${{ inputs.severities }}
     
-    - name: "Checkout current branch"
-      run: git checkout -f $GITHUB_SHA
-      shell: bash
+    - name: Checkout current commit
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+      with:
+        ref: ${{ github.sha }}
+        clean: false
     
     - name: "Scan Current Branch"
       uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # 0.29.0
