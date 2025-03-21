@@ -1,0 +1,82 @@
+name: Trivy diff
+description: Compare Trivy scan results between two branches
+inputs:
+  github-token:
+    description: "GitHub token for posting the comment"
+    required: true
+  severities:
+    description: "Comma-separated list of severity levels to consider (e.g., CRITICAL,HIGH,MEDIUM,LOW)"
+    required: false
+    default: "CRITICAL,HIGH"
+    
+runs:
+  using: "composite"
+  steps:
+    - name: "Checkout Repository"
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+      with:
+        fetch-depth: 0
+    
+    - name: "Checkout Target Branch"
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+      with:
+        ref: ${{ github.base_ref }}
+    
+    - name: "Scan Target Branch"
+      uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # 0.29.0
+      with:
+        scan-type: "fs"
+        scanners: vuln
+        timeout: 30s
+        ignore-unfixed: true	
+        version: v0.58.0
+        hide-progress: true
+        output: base_trivy_report.json
+        format: json
+        scan-ref: .
+        severity: ${{ inputs.severities }}
+    
+    - name: Checkout current commit
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+      with:
+        ref: ${{ github.sha }}
+        clean: false
+    
+    - name: "Scan Current Branch"
+      uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # 0.29.0
+      with:
+        scan-type: "fs"
+        scanners: vuln
+        timeout: 30s
+        ignore-unfixed: true	
+        version: v0.58.0
+        hide-progress: true
+        output: main_trivy_report.json
+        format: json
+        scan-ref: .
+        severity: ${{ inputs.severities }}
+        skip-setup-trivy: true
+      env:
+        TRIVY_SKIP_DB_UPDATE: true
+        TRIVY_SKIP_JAVA_DB_UPDATE: true
+        
+    - name: "Run Trivy Diff"
+      id: trivy-diff
+      run: |
+        node $GITHUB_ACTION_PATH/trivy-diff.js base_trivy_report.json main_trivy_report.json > output.txt
+      shell: bash
+    
+    - name: "Comment the Trivy diff"
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        BRANCH_NAME: ${{ github.head_ref || github.ref_name }} 
+      run: |
+        output=$(cat output.txt)
+        if [ "$output" == "No new vulnerabilities found." ]; then
+          echo "No new vulnerabilities found."
+          exit 0
+        else
+          comment=$(echo -e "### New vulnerabilities introduced in branch $BRANCH_NAME compared to ${{ github.base_ref }}\n\n" ; jq -r '.[] | "* \(.VulnerabilityID), Severity: \(.Severity), Package: \(.PkgName), Installed: \(.InstalledVersion), Fixed: \(.FixedVersion // "N/A")"' output.txt)
+          gh pr comment ${{ github.event.pull_request.number }} --body "$comment"
+        fi
+      shell: bash
