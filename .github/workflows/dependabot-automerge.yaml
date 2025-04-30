@@ -31,18 +31,19 @@ jobs:
     steps:
       - name: Generate token
         id: generate-token
-        uses: tibdex/github-app-token@v1
+        uses: tibdex/github-app-token@32691ba7c9e7063bd457bd8f2a5703138591fa58 # v1
         continue-on-error: true
         with:
           app_id: ${{ secrets.DEPENDABOTREVIEWER_ID }}
           private_key: ${{ secrets.DEPENDABOTREVIEWER_PEM }}
       - name: Dependabot metadata
         id: dependabot-metadata
-        uses: dependabot/fetch-metadata@v1.5.1
+        uses: dependabot/fetch-metadata@cd6e996708b8cfe0b639401134a3b9a3177be7b2 # v1.5.1
       - name: Enable auto-merge for Dependabot PRs
-        run: gh pr merge --auto --${{ inputs.repository-merge-method }} "$PR_URL"
+        run: gh pr merge --auto --${MERGE_METHOD} "$PR_URL"
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || secrets.envPAT || secrets.GITHUB_TOKEN}}
+          MERGE_METHOD: ${{ inputs.repository-merge-method }}
       - name: Approve patch updates
         if: ${{ steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' }}
         run: gh pr review $PR_URL --approve -b "**Approving** patch update"

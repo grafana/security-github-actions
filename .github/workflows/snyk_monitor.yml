@@ -7,23 +7,17 @@ on:
         required: true
 jobs:
   snyk_scans:
-
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3
+        with:
+          persist-credentials: false
       - name: Run Snyk to import ${{ github.event.repository.name }} to Snyk
         continue-on-error: true
-        uses: snyk/actions/golang@master
+        uses: snyk/actions/golang@4a528b5c534bb771b6e3772656a8e0e9dc902f8b # master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: monitor
-          args:  --strict-out-of-sync=false --all-projects --exclude=devenv --tags=repo=${{ github.event.repository.name }}
-
-
-
-
-
-
-
+          args: --strict-out-of-sync=false --all-projects --exclude=devenv --tags=repo=${{ github.event.repository.name }}

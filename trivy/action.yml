@@ -69,14 +69,16 @@ runs:
     - name: "Comment the Trivy diff"
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
-        BRANCH_NAME: ${{ github.head_ref || github.ref_name }} 
+        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        BASE_REF: ${{ github.base_ref }}
       run: |
         output=$(cat output.txt)
         if [ "$output" == "No new vulnerabilities found." ]; then
           echo "No new vulnerabilities found."
           exit 0
         else
-          comment=$(echo -e "### New vulnerabilities introduced in branch $BRANCH_NAME compared to ${{ github.base_ref }}\n\n" ; jq -r '.[] | "* \(.VulnerabilityID), Severity: \(.Severity), Package: \(.PkgName), Installed: \(.InstalledVersion), Fixed: \(.FixedVersion // "N/A")"' output.txt)
-          gh pr comment ${{ github.event.pull_request.number }} --body "$comment"
+          comment=$(echo -e "### New vulnerabilities introduced in branch $BRANCH_NAME compared to $BASE_REF\n\n" ; jq -r '.[] | "* \(.VulnerabilityID), Severity: \(.Severity), Package: \(.PkgName), Installed: \(.InstalledVersion), Fixed: \(.FixedVersion // "N/A")"' output.txt)
+          gh pr comment $PR_NUMBER --body "$comment"
         fi
       shell: bash
