@@ -16,4 +16,4 @@ jobs:
 
     uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@5946b80e86f32bb4d208c2483c58345bbeef03d2
     with:
-      codeql-enabled: false
+      runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
