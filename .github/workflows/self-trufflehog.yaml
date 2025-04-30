@@ -1,4 +1,4 @@
-name: zizmor GitHub Actions static analysis
+name: Trufflehog GitHub Actions
 on:
   push:
   pull_request:
