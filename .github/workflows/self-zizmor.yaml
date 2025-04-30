@@ -1,0 +1,19 @@
+name: zizmor GitHub Actions static analysis
+on:
+  push:
+  pull_request:
+
+jobs:
+  zizmor:
+    name: Run zizmor from current branch (self test)
+
+    permissions:
+      actions: read
+      contents: read
+
+      pull-requests: write
+      security-events: write
+
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@5946b80e86f32bb4d208c2483c58345bbeef03d2
+    with:
+      codeql-enabled: false
