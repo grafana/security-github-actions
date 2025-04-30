@@ -14,7 +14,7 @@ jobs:
       pull-requests: write
       security-events: write
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@8fa210559ab2cc62e7b12d3bb9cba19dbc862c11
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@5cc7159e3c4f86cccb6756174d6ad62a37b87419
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: never
