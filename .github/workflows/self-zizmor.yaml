@@ -1,8 +1,11 @@
 name: zizmor GitHub Actions static analysis
 on:
   push:
+    paths:
+      - '.github/**' 
   pull_request:
-
+    paths:
+      - '.github/**'
 jobs:
   zizmor:
     name: Run zizmor from current branch (self test)
