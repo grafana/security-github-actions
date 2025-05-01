@@ -2,10 +2,10 @@ name: zizmor GitHub Actions static analysis
 on:
   push:
     paths:
-      - '.github/**' 
+      - ".github/**"
   pull_request:
     paths:
-      - '.github/**'
+      - ".github/**"
 jobs:
   zizmor:
     name: Run zizmor from current branch (self test)
@@ -17,7 +17,7 @@ jobs:
       pull-requests: write
       security-events: write
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@5cc7159e3c4f86cccb6756174d6ad62a37b87419
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@e2906412bb6c7cb3b8ee689302070cf704db52ac
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: never
