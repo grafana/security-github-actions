@@ -21,3 +21,5 @@ jobs:
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: never
+      min-severity: high
+      min-confidence: low
