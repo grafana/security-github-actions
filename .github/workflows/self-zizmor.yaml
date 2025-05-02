@@ -7,6 +7,31 @@ on:
     paths:
       - ".github/**"
 jobs:
+  zizmor-check:
+    name: Check whether there are things to scan
+    permissions:
+      contents: read
+    runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
+    outputs:
+      found-files: ${{ steps.zizmor-check.outputs.found-files }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Run zizmor
+        id: zizmor-check
+        shell: bash
+        run: |
+          FOUND_FILES=false
+          if [ -e .github/workflows/*.{yml,yaml} ]; then
+              FOUND_FILES=true
+          fi
+          if [ -e **/.github/workflows/*.{yml,yaml} ]; then
+              FOUND_FILES=true
+          fi
+          if [ -e **/action.{yml,yaml} ]; then
+              FOUND_FILES=true
+          fi
+          echo "found-files=${FOUND_FILES}" >> $GITHUB_OUTPUT
   zizmor:
     name: Run zizmor from current branch (self test)
 
@@ -16,6 +41,10 @@ jobs:
 
       pull-requests: write
       security-events: write
+
+    needs:
+      - zizmor-check
+    if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
     uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@b502a15952bab7f72daa1f8ce115491a6d97be59
     with:
