@@ -22,13 +22,8 @@ jobs:
         shell: bash
         run: |
           FOUND_FILES=false
-          if [ -e .github/workflows/*.{yml,yaml} ]; then
-              FOUND_FILES=true
-          fi
-          if [ -e **/.github/workflows/*.{yml,yaml} ]; then
-              FOUND_FILES=true
-          fi
-          if [ -e **/action.{yml,yaml} ]; then
+          SEARCH=$(find . -path "**/.github/workflows/*.yml" -o -path "**/.github/workflows/*.yaml" -o -path "**/action.yml" -o -path "**/action.yaml")
+          if [ -n "$SEARCH" ]; then
               FOUND_FILES=true
           fi
           echo "found-files=${FOUND_FILES}" >> $GITHUB_OUTPUT
