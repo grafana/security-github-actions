@@ -32,6 +32,8 @@ jobs:
     runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
     outputs:
       token: ${{ steps.set-output.outputs.token }}
+    permissions:
+      id-token: write
     steps:
       - id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets-v1.2.0
