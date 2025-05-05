@@ -37,6 +37,7 @@ jobs:
     steps:
       - id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets-v1.2.0
+        continue-on-error: true # Will fail for external repos
         with:
           # Secrets placed in the ci/common/<path> path in Vault
           common_secrets: |
@@ -46,6 +47,7 @@ jobs:
         id: get-github-token
         uses: actions/create-github-app-token@v2
         continue-on-error: true
+        if: ${{ env.ZIZMOR_APP_ID != '' }}
         with:
           app-id: ${{ env.ZIZMOR_APP_ID }}
           private-key: ${{ env.ZIZMOR_PRIVATE_KEY }}
