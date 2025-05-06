@@ -1,0 +1,141 @@
+# Security Vulnerability Observability Configuration
+# This configuration file defines how vulnerability scanning is performed
+# on your repositories and container images.
+version: '1.0'
+
+# ==============================================================================
+# PROJECT CONFIGURATION
+# ==============================================================================
+project:
+  # Project name is inherited as the Github repo name
+
+  # Top level ownership information - identifies a point of contact for security issues
+  owners:
+    # GitHub team ownership
+    - type: 'github'
+      team: '<github-team-name>' # Name of the GitHub team responsible for this project
+
+    # Tanka team ownership (internal team structure)
+    - type: 'tanka'
+      team: '<tanka-team-name>' # Name of the Tanka team responsible for this project
+
+    # Individual ownership
+    - type: 'individual'
+      name: '<owner-name>' # Full name of the individual owner
+      github: '<github-username>' # GitHub username of the individual owner
+
+# ==============================================================================
+# SOURCES CONFIGURATION
+# ==============================================================================
+sources:
+  # ------------------------------------------------------------------------------
+  # REPOSITORY SOURCE (one per repository)
+  # Used for scanning code for vulnerabilities
+  # ------------------------------------------------------------------------------
+  repository:
+    # Repository name is inherited as the Github repo name
+
+    # Groups are used to improve organization in Vuln-O11y
+    groups:
+      - '<group-name>' # Name of the group this repository belongs to
+
+    # Basic scan configuration settings
+    scanSettings:
+      # Whether to scan the main branch in addition to tags
+      scanMainBranch: true # Set to true to scan the main branch
+
+      # Whether to automatically archive versions that have not been scanned for 7 days
+      autoArchive: true # Set to true to automatically archive versions
+
+      # Paths to exclude from scanning (e.g., test directories, examples)
+      excludedPaths:
+        - 'test/' # Exclude test directory
+        - 'examples/' # Exclude examples directory
+        - 'docs/' # Exclude documentation
+
+    # Strategy for determining which versions to scan
+    scanStrategy:
+      # Options: 'semver' (for semantic versioning) or 'tagCount' (for scanning latest N tags)
+      type: 'semver'
+
+      # SEMVER SETTINGS - Only used when type is 'semver'
+      # These control how many versions of each type to scan
+      semverSettings:
+        majorVersions: 2 # Number of major versions to track (e.g., v1.x.x, v2.x.x)
+        minorVersions: 3 # Number of minor versions to track per major (e.g., v2.1.x, v2.2.x, v2.3.x)
+        patchVersions: 2 # Number of patch versions to track per minor (e.g., v2.3.1, v2.3.2)
+
+      # TAG COUNT SETTINGS - Only used when type is 'tagCount'
+      # Scans the N most recent tags
+      tagCountSettings:
+        latestTagsCount: 10 # Number of most recent tags to scan
+
+    # Ownership information - identifies a point of contact for security issues
+    owners:
+      # GitHub team ownership
+      - type: 'github'
+        team: '<github-team-name>' # Name of the GitHub team responsible for this project
+
+      # Tanka team ownership (internal team structure)
+      - type: 'tanka'
+        team: '<tanka-team-name>' # Name of the Tanka team responsible for this project
+
+      # Individual ownership
+      - type: 'individual'
+        name: '<owner-name>' # Full name of the individual owner
+        github: '<github-username>' # GitHub username of the individual owner
+
+  # ------------------------------------------------------------------------------
+  # CONTAINER SOURCES (multiple per repository)
+  # Used for scanning container images for vulnerabilities
+  # ------------------------------------------------------------------------------
+  containers:
+    - name: '<container-name>' # Name of the container
+      registry: '<registry-name>' # Container registry (e.g., 'docker.io', 'gcr.io')
+
+      # Groups are used to improve organization in Vuln-O11y
+      groups:
+        - '<group-name>' # Name of the group this repository belongs to
+
+      # Basic scan configuration settings
+      scanSettings:
+        # Whether to automatically archive versions that have not been scanned for 7 days
+        autoArchive: true # Set to true to automatically archive versions
+
+        # Patterns to exclude from scanning (e.g., nightly builds, beta releases)
+        excludedPatterns:
+          - '-nightly' # Exclude nightly builds
+          - '-rc' # Exclude release candidates
+          - '-beta' # Exclude beta releases
+
+      # Strategy for determining which versions to scan
+      scanStrategy:
+        # Options: 'semver' (for semantic versioning) or 'tagCount' (for scanning latest N tags)
+        type: 'semver'
+
+        # SEMVER SETTINGS - Only used when type is 'semver'
+        # These control how many versions of each type to scan
+        semverSettings:
+          majorVersions: 1 # Number of major versions to track
+          minorVersions: 2 # Number of minor versions to track per major
+          patchVersions: 3 # Number of patch versions to track per minor
+
+        # TAG COUNT SETTINGS - Only used when type is 'tagCount'
+        # This is simpler and just scans the N most recent tags
+        tagCountSettings:
+          latestTagsCount: 5 # Number of most recent tags to scan
+      
+      # Ownership information - identifies a point of contact for security issues
+      owners:
+        # GitHub team ownership
+        - type: 'github'
+          team: '<github-team-name>' # Name of the GitHub team responsible for this project
+
+        # Tanka team ownership (internal team structure)
+        - type: 'tanka'
+          team: '<tanka-team-name>' # Name of the Tanka team responsible for this project
+
+        # Individual ownership
+        - type: 'individual'
+          name: '<owner-name>' # Full name of the individual owner
+          github: '<github-username>' # GitHub username of the individual owner
