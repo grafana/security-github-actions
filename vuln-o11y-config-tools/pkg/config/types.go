@@ -1,10 +1,10 @@
 package config
 
-// VulnerabilityConfig is the root of the file (`version`, `project`, `sources`).
+// VulnerabilityConfig is the root of the file
 type VulnerabilityConfig struct {
-	Version string  `yaml:"version"  json:"version"`
-	Project Project `yaml:"project"  json:"project"`
-	Sources Sources `yaml:"sources"  json:"sources"`
+	Version string  `yaml:"version" validate:"required"`
+	Project Project `yaml:"project" validate:"required,dive"`
+	Sources Sources `yaml:"sources" validate:"required,dive"`
 }
 
 /* -------------------------------------------------------------------------- */
@@ -12,15 +12,15 @@ type VulnerabilityConfig struct {
 /* -------------------------------------------------------------------------- */
 
 type Project struct {
-	Name   string  `yaml:"name"   json:"name"`
-	Owners []Owner `yaml:"owners" json:"owners"`
+	Name   string  `yaml:"name"   validate:"required"`
+	Owners []Owner `yaml:"owners" validate:"required,min=1,dive"` // ≥1 owner
 }
 
 type Owner struct {
-	Type   string `yaml:"type"   json:"type"`
-	Team   string `yaml:"team,omitempty"   json:"team,omitempty"`   // for github / tanka teams
-	Name   string `yaml:"name,omitempty"   json:"name,omitempty"`   // for individual owners
-	GitHub string `yaml:"github,omitempty" json:"github,omitempty"` // for individual owners
+	Type   string `yaml:"type"   validate:"required,oneof=github tanka individual"`
+	Team   string `yaml:"team,omitempty"`
+	Name   string `yaml:"name,omitempty"`
+	GitHub string `yaml:"github,omitempty"`
 }
 
 /* -------------------------------------------------------------------------- */
@@ -28,56 +28,56 @@ type Owner struct {
 /* -------------------------------------------------------------------------- */
 
 type Sources struct {
-	Repository *RepositorySource  `yaml:"repository,omitempty" json:"repository,omitempty"`
-	Containers []*ContainerSource `yaml:"containers,omitempty" json:"containers,omitempty"`
+	Repository *RepositorySource  `yaml:"repository,omitempty" validate:"required,dive"`
+	Containers []*ContainerSource `yaml:"containers,omitempty" validate:"omitempty,min=1,dive"`
 }
 
 /* ---------- Repository source -------------------------------------------- */
 
 type RepositorySource struct {
-	Name         string                 `yaml:"name"         json:"name"` // includes organization name
-	Groups       []string               `yaml:"groups,omitempty" json:"groups,omitempty"`
-	ScanSettings RepositoryScanSettings `yaml:"scanSettings" json:"scanSettings"`
-	ScanStrategy ScanStrategy           `yaml:"scanStrategy" json:"scanStrategy"`
-	Owners       []Owner                `yaml:"owners" json:"owners"`
+	Name         string                 `yaml:"name"         validate:"required"`
+	Groups       []string               `yaml:"groups,omitempty"`
+	ScanSettings RepositoryScanSettings `yaml:"scanSettings" validate:"dive"`
+	ScanStrategy ScanStrategy           `yaml:"scanStrategy" validate:"required,dive"`
+	Owners       []Owner                `yaml:"owners"       validate:"required,min=1,dive"`
 }
 
 type RepositoryScanSettings struct {
-	ScanMainBranch bool     `yaml:"scanMainBranch" json:"scanMainBranch"`
-	AutoArchive    bool     `yaml:"autoArchive"    json:"autoArchive"`
-	ExcludedPaths  []string `yaml:"excludedPaths,omitempty" json:"excludedPaths,omitempty"`
+	ScanMainBranch bool     `yaml:"scanMainBranch"`
+	AutoArchive    bool     `yaml:"autoArchive"`
+	ExcludedPaths  []string `yaml:"excludedPaths,omitempty"`
 }
 
 /* ---------- Container source --------------------------------------------- */
 
 type ContainerSource struct {
-	Name         string                `yaml:"name"     json:"name"`
-	Registry     string                `yaml:"registry" json:"registry"`
-	Groups       []string              `yaml:"groups,omitempty" json:"groups,omitempty"`
-	ScanSettings ContainerScanSettings `yaml:"scanSettings" json:"scanSettings"`
-	ScanStrategy ScanStrategy          `yaml:"scanStrategy" json:"scanStrategy"`
-	Owners       []Owner               `yaml:"owners" json:"owners"`
+	Name         string                `yaml:"name"     validate:"required"`
+	Registry     string                `yaml:"registry" validate:"required"`
+	Groups       []string              `yaml:"groups,omitempty"`
+	ScanSettings ContainerScanSettings `yaml:"scanSettings" validate:"dive"`
+	ScanStrategy ScanStrategy          `yaml:"scanStrategy" validate:"required,dive"`
+	Owners       []Owner               `yaml:"owners"       validate:"required,min=1,dive"`
 }
 
 type ContainerScanSettings struct {
-	AutoArchive      bool     `yaml:"autoArchive"      json:"autoArchive"`
-	ExcludedPatterns []string `yaml:"excludedPatterns,omitempty" json:"excludedPatterns,omitempty"`
+	AutoArchive      bool     `yaml:"autoArchive"`
+	ExcludedPatterns []string `yaml:"excludedPatterns,omitempty"`
 }
 
 /* ---------- Scan-strategy types ----------------------------------- */
 
 type ScanStrategy struct {
-	Type             string            `yaml:"type"             json:"type"` // "semver" or "tagCount"
-	SemverSettings   *SemverSettings   `yaml:"semverSettings,omitempty"   json:"semverSettings,omitempty"`
-	TagCountSettings *TagCountSettings `yaml:"tagCountSettings,omitempty" json:"tagCountSettings,omitempty"`
+	Type             string            `yaml:"type" validate:"required,oneof=semver tagCount"`
+	SemverSettings   *SemverSettings   `yaml:"semverSettings,omitempty"`
+	TagCountSettings *TagCountSettings `yaml:"tagCountSettings,omitempty"`
 }
 
 type SemverSettings struct {
-	MajorVersions int `yaml:"majorVersions" json:"majorVersions"`
-	MinorVersions int `yaml:"minorVersions" json:"minorVersions"`
-	PatchVersions int `yaml:"patchVersions" json:"patchVersions"`
+	MajorVersions int `yaml:"majorVersions" validate:"required,gte=0"`
+	MinorVersions int `yaml:"minorVersions" validate:"required,gte=0"`
+	PatchVersions int `yaml:"patchVersions" validate:"required,gte=0"`
 }
 
 type TagCountSettings struct {
-	LatestTagsCount int `yaml:"latestTagsCount" json:"latestTagsCount"`
+	LatestTagsCount int `yaml:"latestTagsCount" validate:"required,gte=1,lte=100"`
 }

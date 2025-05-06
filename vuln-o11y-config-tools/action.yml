@@ -29,3 +29,5 @@ runs:
   args:
     - ${{ inputs.command }}
     - --file=${{ inputs.config-file }}
+  env:
+    GITHUB_REPOSITORY: ${{ github.repository }}

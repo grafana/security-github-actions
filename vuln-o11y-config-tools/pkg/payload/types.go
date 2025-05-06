@@ -1,6 +1,6 @@
 package payload
 
-import "github.com/grafana/vuln-o11y-scan-dispatch/pkg/config"
+import "github.com/grafana/vuln-o11y-config-tools/pkg/config"
 
 type ScanOrchestratorRequest struct {
 	Type       string                           `json:"type"` // container, repository
