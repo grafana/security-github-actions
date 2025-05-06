@@ -82,3 +82,4 @@ jobs:
       min-severity: high
       min-confidence: low
       github-token: ${{ needs.get-github-token.outputs.token }}
+      extra-args: --offline
