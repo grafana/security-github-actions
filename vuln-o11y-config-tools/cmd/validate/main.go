@@ -18,7 +18,7 @@ func main() {
 	file := flag.String("file", "vuln-o11y-config.yaml", "config YAML")
 	flag.Parse()
 
-	cfg, err := config.LoadVulnerabilityConfig(*file)
+	cfg, err := config.LoadVulnerabilityConfig(*file, repoName)
 	if err != nil {
 		log.Fatalf("❌ %v", err)
 	}

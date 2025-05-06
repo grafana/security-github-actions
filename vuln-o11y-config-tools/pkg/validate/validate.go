@@ -29,8 +29,8 @@ func newValidator() *validator.Validate {
 	v := validator.New()
 
 	// Custom validation rules
-	v.RegisterStructValidation(scanStrategyRule, config.ScanStrategy{})
-	v.RegisterStructValidation(ownerRule, config.Owner{})
-	v.RegisterStructValidation(projectRepoNameRule, config.VulnerabilityConfig{})
+	v.RegisterStructValidation(scanStrategyRule, &config.ScanStrategy{})
+	v.RegisterStructValidation(ownerRule, &config.Owner{})
+	v.RegisterStructValidation(projectRepoNameRule, &config.VulnerabilityConfig{})
 	return v
 }

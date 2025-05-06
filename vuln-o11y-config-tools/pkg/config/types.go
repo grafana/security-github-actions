@@ -3,8 +3,8 @@ package config
 // VulnerabilityConfig is the root of the file
 type VulnerabilityConfig struct {
 	Version string  `yaml:"version" validate:"required"`
-	Project Project `yaml:"project" validate:"required,dive"`
-	Sources Sources `yaml:"sources" validate:"required,dive"`
+	Project Project `yaml:"project" validate:"required"`
+	Sources Sources `yaml:"sources" validate:"required"`
 }
 
 /* -------------------------------------------------------------------------- */
@@ -28,8 +28,8 @@ type Owner struct {
 /* -------------------------------------------------------------------------- */
 
 type Sources struct {
-	Repository *RepositorySource  `yaml:"repository,omitempty" validate:"required,dive"`
-	Containers []*ContainerSource `yaml:"containers,omitempty" validate:"omitempty,min=1,dive"`
+	Repository *RepositorySource  `yaml:"repository,omitempty" validate:"required"`
+	Containers []*ContainerSource `yaml:"containers,omitempty" validate:"dive"`
 }
 
 /* ---------- Repository source -------------------------------------------- */
@@ -37,8 +37,8 @@ type Sources struct {
 type RepositorySource struct {
 	Name         string                 `yaml:"name"         validate:"required"`
 	Groups       []string               `yaml:"groups,omitempty"`
-	ScanSettings RepositoryScanSettings `yaml:"scanSettings" validate:"dive"`
-	ScanStrategy ScanStrategy           `yaml:"scanStrategy" validate:"required,dive"`
+	ScanSettings RepositoryScanSettings `yaml:"scanSettings"`
+	ScanStrategy ScanStrategy           `yaml:"scanStrategy" validate:"required"`
 	Owners       []Owner                `yaml:"owners"       validate:"required,min=1,dive"`
 }
 
@@ -54,8 +54,8 @@ type ContainerSource struct {
 	Name         string                `yaml:"name"     validate:"required"`
 	Registry     string                `yaml:"registry" validate:"required"`
 	Groups       []string              `yaml:"groups,omitempty"`
-	ScanSettings ContainerScanSettings `yaml:"scanSettings" validate:"dive"`
-	ScanStrategy ScanStrategy          `yaml:"scanStrategy" validate:"required,dive"`
+	ScanSettings ContainerScanSettings `yaml:"scanSettings"`
+	ScanStrategy ScanStrategy          `yaml:"scanStrategy" validate:"required"`
 	Owners       []Owner               `yaml:"owners"       validate:"required,min=1,dive"`
 }
 

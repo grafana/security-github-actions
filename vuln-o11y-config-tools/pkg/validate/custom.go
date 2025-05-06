@@ -48,7 +48,7 @@ func ownerRule(sl validator.StructLevel) {
 
 // Project name and repository name must match
 func projectRepoNameRule(sl validator.StructLevel) {
-	root := sl.Current().Interface().(*config.VulnerabilityConfig)
+	root := sl.Current().Interface().(config.VulnerabilityConfig)
 
 	if root.Project.Name == "" {
 		sl.ReportError(root.Project.Name, "Project.Name", "Project.Name",

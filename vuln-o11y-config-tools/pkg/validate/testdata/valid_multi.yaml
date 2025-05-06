@@ -1,0 +1,41 @@
+version: "1.0"
+
+project:
+  owners:
+    - type: github
+      team: security
+
+sources:
+  repository:
+    scanStrategy:
+      type: semver
+      semverSettings:
+        majorVersions: 1
+        minorVersions: 2
+        patchVersions: 3
+    owners:
+      - type: github
+        team: security
+
+  containers:
+    - name: grafana/vuln-o11y-api
+      registry: docker.io
+      scanStrategy:
+        type: tagCount
+        tagCountSettings:
+          latestTagsCount: 5
+      owners:
+        - type: github
+          team: security
+
+    - name: grafana/vuln-o11y-ui
+      registry: docker.io
+      scanStrategy:
+        type: semver
+        semverSettings:
+          majorVersions: 1
+          minorVersions: 1
+          patchVersions: 1
+      owners:
+        - type: github
+          team: security

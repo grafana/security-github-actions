@@ -20,10 +20,8 @@ func LoadVulnerabilityConfig(path string, repoName string) (*VulnerabilityConfig
 
 	// The project name and the repository source name must match the Github repository name
 	cfg.Project.Name = repoName
-	if cfg.Sources.Repository == nil {
-		cfg.Sources.Repository = &RepositorySource{
-			Name: repoName,
-		}
+	if cfg.Sources.Repository != nil {
+		cfg.Sources.Repository.Name = repoName
 	}
 
 	return &cfg, nil
