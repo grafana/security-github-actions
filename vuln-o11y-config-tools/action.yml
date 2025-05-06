@@ -1,0 +1,31 @@
+name: 'Vuln O11y Config Tools'
+description: |
+  ### Command menu
+  
+  | Command | Purpose | When it publishes |
+  |---------|---------|-------------------|
+  | **`validate`** | Parse & validate `vuln-o11y-config.yaml`; fail the job on error. | _Never_ |
+  | **`dispatch-scans`** | Validate, build scan payloads and forward them. | **Only when `GITHUB_REF` is `refs/heads/main`** |
+  | **`dry-run`** | Validate, build scan apyloads and then print them to stdout | _Never_ |
+
+branding:
+  icon: shield-lock
+  color: purple
+
+inputs:
+  command:
+    description: 'One of: "validate", "dispatch-scans", "dry-run" (default: "validate")'
+    required: false
+    default: validate
+  config-file:
+    description: 'Path to Vuln-O11y YAML'
+    required: false
+    default: vuln-o11y-config.yaml
+
+runs:
+  using: docker
+  image: Dockerfile
+  entrypoint: /entrypoint.sh
+  args:
+    - ${{ inputs.command }}
+    - --file=${{ inputs.config-file }}
