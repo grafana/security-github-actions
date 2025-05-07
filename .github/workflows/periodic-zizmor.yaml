@@ -48,14 +48,13 @@ jobs:
           common_secrets: |
             ZIZMOR_APP_ID=zizmor:app-id
             ZIZMOR_PRIVATE_KEY=zizmor:private-key
-          export_env: false
 
       - name: Authenticate App With GitHub
         uses: actions/create-github-app-token@v2
         id: get-token
         with:
-          app-id: ${{ fromJson(steps.get-secrets.outputs.secrets).ZIZMOR_APP_ID }}
-          private-key: ${{ fromJson(steps.get-secrets.outputs.secrets).ZIZMOR_PRIVATE_KEY }}
+          app-id: ${{ env.ZIZMOR_APP_ID }}
+          private-key: ${{ env.ZIZMOR_PRIVATE_KEY }}
           owner: ${{ matrix.repository.owner }}
           repositories: |
             ${{ matrix.repository.repo }}
