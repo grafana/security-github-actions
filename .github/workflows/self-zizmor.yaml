@@ -27,59 +27,24 @@ jobs:
               FOUND_FILES=true
           fi
           echo "found-files=${FOUND_FILES}" >> $GITHUB_OUTPUT
-  get-github-token:
-    name: Get GitHub Token
-    runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
-    outputs:
-      token: ${{ steps.set-output.outputs.token }}
-    permissions:
-      id-token: write
-    steps:
-      - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets-v1.2.0
-        continue-on-error: true # Will fail for external repos
-        with:
-          # Secrets placed in the ci/common/<path> path in Vault
-          common_secrets: |
-            ZIZMOR_APP_ID=zizmor:app-id
-            ZIZMOR_PRIVATE_KEY=zizmor:private-key
-      - name: Get GitHub Token
-        id: get-github-token
-        uses: actions/create-github-app-token@v2
-        continue-on-error: true
-        if: ${{ env.ZIZMOR_APP_ID != '' }}
-        with:
-          app-id: ${{ env.ZIZMOR_APP_ID }}
-          private-key: ${{ env.ZIZMOR_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
-      - name: Set Output
-        id: set-output
-        shell: bash
-        env:
-          TOKEN: ${{ steps.get-github-token.outputs.token || github.token}}
-        run: |
-          echo "token=${TOKEN}" >> $GITHUB_OUTPUT
   zizmor:
     name: Run zizmor from current branch (self test)
 
     permissions:
       actions: read
       contents: read
-
+      id-token: write
       pull-requests: write
       security-events: write
 
     needs:
       - zizmor-check
-      - get-github-token
     if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@b502a15952bab7f72daa1f8ce115491a6d97be59
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@8ce69f8316247b9c75380ddb1f69df42d6d3a913
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: never
       min-severity: high
       min-confidence: low
-      github-token: ${{ needs.get-github-token.outputs.token }}
       extra-args: --offline
