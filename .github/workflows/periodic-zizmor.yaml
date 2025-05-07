@@ -1,0 +1,95 @@
+name: Periodic Zizmor
+
+permissions: {}
+
+on:
+  schedule:
+    # Set to run once a day at 10:00 UTC
+    - cron: "0 10 * * *"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  zizmor:
+    name: Run zizmor
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repository:
+          #   - owner: grafana
+          #     repo: grafana
+          #   - owner: grafana
+          #     repo: loki
+          #   - owner: grafana
+          #     repo: tempo
+          #   - owner: grafana
+          #     repo: mimir
+          - owner: grafana
+            repo: security-github-actions
+
+    env:
+      ZIZMOR_VERSION: 1.6.0
+      MIN_SEVERITY: high
+      MIN_CONFIDENCE: low
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Get GitHub App Secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets-v1.2.0
+        with:
+          common_secrets: |
+            ZIZMOR_APP_ID=zizmor:app-id
+            ZIZMOR_PRIVATE_KEY=zizmor:private-key
+          export_env: false
+
+      - name: Authenticate App With GitHub
+        uses: actions/create-github-app-token@v2
+        id: get-token
+        with:
+          app-id: ${{ fromJson(steps.get-secrets.outputs.secrets).ZIZMOR_APP_ID }}
+          private-key: ${{ fromJson(steps.get-secrets.outputs.secrets).ZIZMOR_PRIVATE_KEY }}
+          owner: ${{ matrix.repository.owner }}
+          repositories: |
+            ${{ matrix.repository.repo }}
+
+      - name: Checkout Target
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repository.owner }}/${{ matrix.repository.repo }}
+          token: ${{ steps.get-token.outputs.token }}
+          path: target
+
+      - name: Setup UV
+        uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca # v6.0.1
+        with:
+          enable-cache: true
+          activate-environment: true
+          cache-suffix: ${{ env.ZIZMOR_VERSION }}
+          cache-dependency-glob: ""
+
+      - name: Run zizmor
+        env:
+          ZIZMOR_CACHE_DIR: ${{ runner.temp }}/.cache/zizmor
+          REPOSITORY: ${{ matrix.repository.owner }}/${{ matrix.repository.repo }}
+          GH_TOKEN: ${{ steps.get-token.outputs.token }}
+        shell: sh
+        run: >-
+          uvx zizmor@"${ZIZMOR_VERSION}"
+          --format sarif
+          --min-severity "${MIN_SEVERITY}"
+          --min-confidence "${MIN_CONFIDENCE}"
+          --config .github/zizmor.yml
+          ./target
+          > results.sarif
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3.28.17
+        with:
+          sarif_file: ./results.sarif
+          token: ${{ steps.get-token.outputs.token }}
+          checkout_path: ./target
