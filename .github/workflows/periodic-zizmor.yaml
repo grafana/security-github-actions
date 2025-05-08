@@ -89,11 +89,41 @@ jobs:
           ./target
           > results.sarif
 
+      - name: Repository Info
+        id: repo-info
+        working-directory: ./target
+        run: |
+          SHA=$(git rev-parse HEAD)
+          REF=$(git rev-parse --symbolic-full-name HEAD)
+
+          echo "sha=${SHA}" >> $GITHUB_OUTPUT
+          echo "ref=${REF}" >> $GITHUB_OUTPUT
+
+      - name: Prepare SARIF results
+        id: prepare-sarif
+        run: |
+          RESULTS=$(gzip -c results.sarif | base64 -w 0)
+          echo "results=${RESULTS}" >> $GITHUB_OUTPUT
+
       - name: Upload SARIF results
-        uses: github/codeql-action/upload-sarif@v3.28.17
+        uses: actions/github-script@v7
+        env:
+          OWNER: ${{ matrix.repository.owner }}
+          REPO: ${{ matrix.repository.repo }}
+          SHA: ${{ steps.repo-info.outputs.sha }}
+          REF: ${{ steps.repo-info.outputs.ref }}
+          SARIF_RESULTS: ${{ steps.prepare-sarif.outputs.results }}
         with:
-          sarif_file: ./results.sarif
-          token: ${{ steps.get-token.outputs.token }}
-          external-repository-token: ${{ steps.get-token.outputs.token }}
-          checkout_path: ./target
-          category: zizmor-periodic
+          github-token: ${{ steps.get-token.outputs.token }}
+          script: |
+            const { OWNER, REPO, SHA, REF, SARIF_RESULTS } = process.env;
+
+            const response = await github.rest.codeScanning.uploadSarif({
+              owner: OWNER,
+              repo: REPO,
+              commit_sha: SHA,
+              ref: REF,
+              sarif: SARIF_RESULTS,
+            });
+
+            console.log(response.status);
