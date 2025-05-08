@@ -95,7 +95,7 @@ jobs:
         working-directory: ./target
         run: |
           SHA=$(git rev-parse HEAD)
-          REF=$(git rev-parse --symbolic-full-name HEAD)
+          REF=$(git symbolic-ref --quiet HEAD)
 
           echo "sha=${SHA}" >> $GITHUB_OUTPUT
           echo "ref=${REF}" >> $GITHUB_OUTPUT
