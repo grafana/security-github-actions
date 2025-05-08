@@ -66,8 +66,8 @@ jobs:
           repository: ${{ matrix.repository.owner }}/${{ matrix.repository.repo }}
           token: ${{ steps.get-token.outputs.token }}
           path: target
-          fetch-depth: 0
           ref: ${{ matrix.repository.ref }}
+
       - name: Setup UV
         uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca # v6.0.1
         with:
