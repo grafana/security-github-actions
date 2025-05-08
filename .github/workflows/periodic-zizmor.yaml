@@ -20,18 +20,18 @@ jobs:
     strategy:
       matrix:
         repository:
-          #   - owner: grafana
-          #     repo: grafana
-          #   - owner: grafana
-          #     repo: loki
-          #   - owner: grafana
-          #     repo: tempo
-          #   - owner: grafana
-          #     repo: mimir
           - owner: grafana
-            repo: security-github-actions
+            repo: grafana
             ref: main
-
+          - owner: grafana
+            repo: loki
+            ref: main
+          - owner: grafana
+            repo: tempo
+            ref: main
+          - owner: grafana
+            repo: mimir
+            ref: main
     env:
       ZIZMOR_VERSION: 1.6.0
       MIN_SEVERITY: high
