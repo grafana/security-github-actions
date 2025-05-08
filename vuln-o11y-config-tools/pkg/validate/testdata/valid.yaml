@@ -1,0 +1,16 @@
+version: "1.0"
+project:
+  owners:
+    - type: github
+      team: security
+sources:
+  repository:
+    scanStrategy:
+      type: semver
+      semverSettings:
+        majorVersions: 1
+        minorVersions: 2
+        patchVersions: 3
+    owners:
+      - type: github
+        team: security

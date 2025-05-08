@@ -1,0 +1,12 @@
+version: "1.0"
+project:
+  owners:
+    - type: github        # missing team → invalid
+sources:
+  repository:
+    scanStrategy:
+      type: tagCount
+      tagCountSettings:
+        latestTagsCount: 5
+    owners:
+      - type: individual  # missing name & github → invalid

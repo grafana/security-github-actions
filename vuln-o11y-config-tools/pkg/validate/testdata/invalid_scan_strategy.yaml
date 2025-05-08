@@ -1,0 +1,12 @@
+version: "1.0"
+project:
+  owners:
+    - type: github
+      team: security
+sources:
+  repository:
+    scanStrategy:
+      type: semver          # semverSettings block missing → should fail
+    owners:
+      - type: github
+        team: security
