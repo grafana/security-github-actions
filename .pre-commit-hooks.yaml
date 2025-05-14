@@ -1,0 +1,8 @@
+- id: trufflehog
+  name: TruffleHog
+  language: script
+  entry: pre-commit/trufflehog.sh
+  stages:
+    - pre-commit
+    - pre-push
+  types: [text]
