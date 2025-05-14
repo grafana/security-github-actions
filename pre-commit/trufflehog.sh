@@ -16,5 +16,5 @@ docker \
     file:///workdir \
     --since-commit HEAD \
     --results=verified,unknown \
-    --log-level=-1\
+    --log-level=-1 \
     --fail
