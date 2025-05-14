@@ -1,0 +1,5 @@
+repos:
+  - repo: https://github.com/grafana/security-github-actions
+    rev: main
+    hooks:
+      - id: trufflehog
