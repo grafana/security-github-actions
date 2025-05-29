@@ -102,6 +102,13 @@ jobs:
           RESULTS=$(gzip -c results.sarif | base64 -w 0)
           echo "results=${RESULTS}" >> $GITHUB_OUTPUT
 
+      - name: Print SARIF results to stdout
+        id: print-results
+        env:
+          REPO: ${{ matrix.repository.repo }}
+        run: |
+          echo "repo=${REPO}, results=results.sarif" 
+
       - name: Upload SARIF results
         uses: actions/github-script@v7
         env:
