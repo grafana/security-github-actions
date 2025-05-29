@@ -102,6 +102,35 @@ jobs:
           RESULTS=$(gzip -c results.sarif | base64 -w 0)
           echo "results=${RESULTS}" >> $GITHUB_OUTPUT
 
+      - name: Print SARIF results to stdout
+        id: print-results
+        env:
+          REPO: ${{ matrix.repository.repo }}
+        shell: python
+        run: |
+          import json
+          import os
+
+          repo = os.environ['REPO']
+
+          with open('results.sarif', 'r') as f:
+              sarif_data = json.load(f)
+
+          results = []
+          for result in sarif_data['runs'][0]['results']:
+              item = {
+                  'repo': repo,
+                  'kind': result['kind'],
+                  'level': result['level'],
+                  'message': result['message']['text'],
+                  'annotation': result['locations'][0]['logicalLocations'][0]['properties']['symbolic']['annotation'],
+                  'path': result['locations'][0]['logicalLocations'][0]['properties']['symbolic']['key']['Local']['given_path']
+              }
+              results.append(item)
+
+          for item in results:
+              print(f"repo={item['repo']}, kind={item['kind']}, level={item['level']}, message={item['message']}, annotation={item['annotation']}, path={item['path']}")
+
       - name: Upload SARIF results
         uses: actions/github-script@v7
         env:
