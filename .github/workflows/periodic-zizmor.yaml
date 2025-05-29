@@ -107,7 +107,7 @@ jobs:
         env:
           REPO: ${{ matrix.repository.repo }}
         run: |
-          echo "repo=${REPO}, results=results.sarif" 
+          echo "repo=${REPO}, results=${results.sarif}" 
 
       - name: Upload SARIF results
         uses: actions/github-script@v7
