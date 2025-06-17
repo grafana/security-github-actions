@@ -118,18 +118,27 @@ jobs:
 
           results = []
           for result in sarif_data['runs'][0]['results']:
+              location = result['locations'][0]
+              physical_location = location['physicalLocation']
+              region = physical_location['region']
+              
               item = {
                   'repo': repo,
                   'kind': result['kind'],
                   'level': result['level'],
                   'message': result['message']['text'],
-                  'annotation': result['locations'][0]['logicalLocations'][0]['properties']['symbolic']['annotation'],
-                  'path': result['locations'][0]['logicalLocations'][0]['properties']['symbolic']['key']['Local']['given_path']
+                  'annotation': location['logicalLocations'][0]['properties']['symbolic']['annotation'],
+                  'path': location['logicalLocations'][0]['properties']['symbolic']['key']['Local']['given_path'],
+                  'startLine': region['startLine'],
+                  'endLine': region['endLine'],
+                  'startColumn': region['startColumn'],
+                  'endColumn': region['endColumn'],
+                  'snippet': region['snippet']['text']
               }
               results.append(item)
 
           for item in results:
-              print(f"Periodic zizmor scan finding: repo={item['repo']}, kind={item['kind']}, level={item['level']}, message={item['message']}, annotation={item['annotation']}, path={item['path']}")
+              print(f"Periodic zizmor scan finding: repo={item['repo']}, kind={item['kind']}, level={item['level']}, message={item['message']}, annotation={item['annotation']}, path={item['path']}, snippet={item['snippet']}, startLine={item['startLine']}, endLine={item['endLine']}, startColumn={item['startColumn']}, endColumn={item['endColumn']}")
 
       - name: Upload SARIF results
         uses: actions/github-script@v7
