@@ -41,7 +41,7 @@ jobs:
           persist-credentials: false
 
       - name: Get GitHub App Secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets-v1.2.0
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         with:
           common_secrets: |
             ZIZMOR_APP_ID=zizmor:app-id
