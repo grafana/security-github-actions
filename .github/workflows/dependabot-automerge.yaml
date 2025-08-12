@@ -38,7 +38,7 @@ jobs:
           private_key: ${{ secrets.DEPENDABOTREVIEWER_PEM }}
       - name: Dependabot metadata
         id: dependabot-metadata
-        uses: dependabot/fetch-metadata@cd6e996708b8cfe0b639401134a3b9a3177be7b2 # v1.5.1
+        uses: dependabot/fetch-metadata@08eff52bf64351f401fb50d4972fa95b9f2c2d1b # v2.4.0
       - name: Enable auto-merge for Dependabot PRs
         run: gh pr merge --auto --${MERGE_METHOD} "$PR_URL"
         env:
