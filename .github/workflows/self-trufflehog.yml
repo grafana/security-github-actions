@@ -6,7 +6,7 @@ on:
 
 jobs:
   trufflehog:
-    uses: grafana/shared-workflows/.github/workflows/reusable-trufflehog.yml@main
+    uses: grafana/shared-workflows/.github/workflows/reusable-trufflehog.yml@pr/trufflehog-scan
     with:
       fail-on-secrets: "true"
       extra_args: ""
