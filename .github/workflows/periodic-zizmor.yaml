@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
           persist-credentials: false
 
@@ -48,7 +48,7 @@ jobs:
             ZIZMOR_PRIVATE_KEY=zizmor:private-key
 
       - name: Authenticate App With GitHub
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2
         id: get-token
         with:
           app-id: ${{ env.ZIZMOR_APP_ID }}
@@ -58,7 +58,7 @@ jobs:
             ${{ matrix.repository.repo }}
 
       - name: Checkout Target
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
           repository: ${{ matrix.repository.owner }}/${{ matrix.repository.repo }}
           token: ${{ steps.get-token.outputs.token }}
@@ -141,7 +141,7 @@ jobs:
               print(f"Periodic zizmor scan finding: repo={item['repo']}, kind={item['kind']}, level={item['level']}, message={item['message']}, annotation={item['annotation']}, path={item['path']}, snippet={item['snippet']}, startLine={item['startLine']}, endLine={item['endLine']}, startColumn={item['startColumn']}, endColumn={item['endColumn']}")
 
       - name: Upload SARIF results
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           OWNER: ${{ matrix.repository.owner }}
           REPO: ${{ matrix.repository.repo }}
