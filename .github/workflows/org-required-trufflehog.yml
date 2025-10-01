@@ -23,5 +23,5 @@ jobs:
       # Simplified workflow - only what you need
       fail-on-verified: "true"       # Always fail on real secrets
       fail-on-unverified: "false"    # Lenient for org-wide adoption
-      runs-on: "ubuntu-x64-large"    # Large runner for better performance
+      runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-x86-large' }}    # Large runner for internal repositories
     secrets: inherit
