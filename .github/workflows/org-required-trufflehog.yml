@@ -22,7 +22,7 @@ jobs:
     uses: ./.github/workflows/reusable-trufflehog.yml
     with:
       # Optimized settings for org-wide deployment
-      scan-type: "filesystem"        # Fast: current files only
+      scan-type: "both"              # Comprehensive: scan both filesystem and git history
       scan-scope: "full-repo"        # Scan entire repository for testing
       fail-on-verified: "true"       # Always fail on real secrets
       fail-on-unverified: "false"    # Lenient for org-wide adoption
