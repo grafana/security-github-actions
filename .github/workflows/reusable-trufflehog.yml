@@ -183,7 +183,7 @@ jobs:
           } > trufflehog_scan.txt
 
       - name: Upload scan results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@8e4a5c1e2e2e6e2c1e2e6e2c1e2e6e2c1e2e6e2c # v4.3.3
         if: always()
         with:
           name: trufflehog_scan
