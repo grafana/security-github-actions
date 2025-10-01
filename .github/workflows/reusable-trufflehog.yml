@@ -26,7 +26,7 @@ permissions:
 
 env:
   # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
-  TRUFFLEHOG_VERSION: 3.82.13
+  TRUFFLEHOG_VERSION: 3.89.2
 
 jobs:
   trufflehog-scan:
