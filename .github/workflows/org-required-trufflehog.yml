@@ -1,4 +1,4 @@
-name: Organization Required - TruffleHog Secret Scan
+name: TruffleHog Secret Scanning
 
 # This workflow is designed to be enforced org-wide via GitHub rulesets
 # It calls the reusable TruffleHog workflow with sensible defaults for org-wide deployment
