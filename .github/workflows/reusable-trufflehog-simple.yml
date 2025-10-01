@@ -157,13 +157,15 @@ jobs:
             <!-- trufflehog-secret-scan-comment -->
 
       - name: Create scan report
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
           {
             echo "TruffleHog Scan Report"
             echo "====================="
             echo "Date: $(date)"
             echo "Repository: ${{ github.repository }}"
-            echo "Branch: ${{ github.ref_name }}"
+            echo "Branch: ${GITHUB_REF_NAME}"
             echo "Commit: ${{ github.sha }}"
             echo ""
             echo "Summary:"
@@ -188,20 +190,22 @@ jobs:
           retention-days: 30
 
       - name: Check failure policy
+        env:
+          FAIL_ON_VERIFIED: ${{ inputs.fail-on-verified }}
+          FAIL_ON_UNVERIFIED: ${{ inputs.fail-on-unverified }}
+          VERIFIED_COUNT: ${{ steps.scan.outputs.verified }}
+          UNVERIFIED_COUNT: ${{ steps.scan.outputs.unverified }}
         run: |
-          VERIFIED=${{ steps.scan.outputs.verified }}
-          UNVERIFIED=${{ steps.scan.outputs.unverified }}
-
           SHOULD_FAIL=false
-          if [[ "${{ inputs.fail-on-verified }}" == "true" && "${VERIFIED}" != "0" ]]; then
+          if [[ "${FAIL_ON_VERIFIED}" == "true" && "${VERIFIED_COUNT}" != "0" ]]; then
             SHOULD_FAIL=true
           fi
-          if [[ "${{ inputs.fail-on-unverified }}" == "true" && "${UNVERIFIED}" != "0" ]]; then
+          if [[ "${FAIL_ON_UNVERIFIED}" == "true" && "${UNVERIFIED_COUNT}" != "0" ]]; then
             SHOULD_FAIL=true
           fi
 
           if [[ "${SHOULD_FAIL}" == "true" ]]; then
-            echo "Workflow failed due to secrets found (verified: ${VERIFIED}, unverified: ${UNVERIFIED})"
+            echo "Workflow failed due to secrets found (verified: ${VERIFIED_COUNT}, unverified: ${UNVERIFIED_COUNT})"
             exit 1
           else
             echo "No action needed - secrets within configured thresholds"
