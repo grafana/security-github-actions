@@ -50,9 +50,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
-          # Limited history to reduce credential exposure risk
-          # 100 commits covers most recent development for security scanning
-          fetch-depth: 100
+          # Fetch full history for comprehensive secret scanning
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set TruffleHog version
@@ -109,7 +108,6 @@ jobs:
                 --json \
                 --no-update \
                 --results=verified,unverified \
-                --max-depth=10 \
                 --exclude-globs="*.lock,*.sum,node_modules/**,*.git/**" \
                 > commit-results.json || true
             fi
