@@ -85,101 +85,37 @@ jobs:
           echo "Changed files in this PR:"
           cat changed-files.txt || echo "No files changed"
 
-      - name: Scan for secrets using TruffleHog (git history, filesystem, changed files)
+      - name: Scan for secrets using TruffleHog
         id: scan
-        env:
-          SCAN_TYPE: ${{ inputs.scan-type }}
-          SCAN_SCOPE: ${{ inputs.scan-scope }}
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           set +e
 
-          # Initialize result files
-          echo "[]" > all-results.json
+          # Simple, aggressive scan - no filtering, no complexity
+          echo "Running TruffleHog filesystem scan..."
+          trufflehog filesystem . --json --no-update > scan-results.json || true
 
-          echo "Starting TruffleHog scan with scope: ${SCAN_SCOPE}, type: ${SCAN_TYPE}..."
-
-          # Full repository scanning
-          if [[ "${SCAN_SCOPE}" == "full-repo" || "${SCAN_SCOPE}" == "both" ]]; then
-            echo "Running full repository scan..."
-
-            if [[ "${SCAN_TYPE}" == "commits" || "${SCAN_TYPE}" == "both" ]]; then
-              echo "Scanning git commit history..."
-              trufflehog git file://. \
-                --json \
-                --no-update \
-                --results=verified,unverified,unknown \
-                --max-depth=10 \
-                --exclude-globs="*.lock,*.sum,node_modules/**,*.git/**" \
-                > commit-results.json || true
-            fi
-
-            if [[ "${SCAN_TYPE}" == "filesystem" || "${SCAN_TYPE}" == "both" ]]; then
-              echo "Scanning current filesystem..."
-              trufflehog filesystem . \
-                --json \
-                --no-update \
-                --results=verified,unverified,unknown \
-                > fs-results.json || true
-            fi
-          fi
-
-          # Changed files scanning (PR only)
-          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            if [[ "${SCAN_SCOPE}" == "changed-files" || "${SCAN_SCOPE}" == "both" ]]; then
-              if [[ -s "changed-files.txt" ]]; then
-                echo "Scanning changed files..."
-                echo "[]" > changed-files-results.json
-                while IFS= read -r file; do
-                  if [[ -f "${file}" ]]; then
-                    echo "Scanning: ${file}"
-                    if trufflehog filesystem "${file}" \
-                        --json \
-                        --no-update \
-                        --results=verified,unverified,unknown \
-                        | jq -s 'add' changed-files-results.json - > tmp.json; then
-                      mv tmp.json changed-files-results.json
-                    fi
-                  fi
-                done < changed-files.txt
-              else
-                echo "No changed files to scan"
-              fi
-            fi
-          fi
-
-          # Merge all results
-          touch all-results.ndjson
-          for f in commit-results.json fs-results.json changed-files-results.json; do
-            if [[ -s "${f}" ]]; then
-              cat "${f}" >> all-results.ndjson
-            fi
-          done
-
-          # Convert NDJSON to JSON array for processing
-          if [[ -s all-results.ndjson ]]; then
-            # Filter out empty lines and invalid JSON before processing
-            grep -v '^$' all-results.ndjson | jq -s '.' > all-results.json 2>/dev/null || echo "[]" > all-results.json
-          else
-            echo "[]" > all-results.json
-          fi
-
-          # Validate JSON and count results with error handling
-          if jq empty all-results.json 2>/dev/null; then
+          # Count results
+          if [[ -s scan-results.json ]]; then
+            # Convert NDJSON to array and count
+            jq -s '.' scan-results.json > all-results.json 2>/dev/null || echo "[]" > all-results.json
             VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' all-results.json 2>/dev/null || echo "0")
             UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' all-results.json 2>/dev/null || echo "0")
           else
-            echo "Invalid JSON in all-results.json, resetting to empty array"
             echo "[]" > all-results.json
             VERIFIED=0
             UNVERIFIED=0
           fi
+
           TOTAL=$((VERIFIED+UNVERIFIED))
 
           echo "Scan Summary:"
           echo "Verified secrets: ${VERIFIED}"
           echo "Unverified secrets: ${UNVERIFIED}"
           echo "Total findings: ${TOTAL}"
+
+          # Show raw results for debugging
+          echo "Raw scan results:"
+          cat scan-results.json || echo "No raw results"
 
           {
             echo "verified=${VERIFIED}"
