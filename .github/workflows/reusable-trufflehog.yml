@@ -276,47 +276,6 @@ jobs:
             ${{ steps.comment-body.outputs.body }}
             <!-- trufflehog-secret-scan-comment -->
 
-      - name: Create GitHub status check with scan summary (pass/fail)
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        env:
-          VERIFIED_COUNT: ${{ steps.scan.outputs.verified }}
-          UNVERIFIED_COUNT: ${{ steps.scan.outputs.unverified }}
-          TOTAL_COUNT: ${{ steps.scan.outputs.total }}
-          FAIL_ON_VERIFIED: ${{ inputs.fail-on-verified }}
-          FAIL_ON_UNVERIFIED: ${{ inputs.fail-on-unverified }}
-          SCAN_TYPE: ${{ inputs.scan-type }}
-          SCAN_SCOPE: ${{ inputs.scan-scope }}
-          TRUFFLEHOG_VERSION: ${{ inputs.trufflehog-version }}
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            const verified = parseInt(process.env.VERIFIED_COUNT || "0", 10);
-            const unverified = parseInt(process.env.UNVERIFIED_COUNT || "0", 10);
-            const total = parseInt(process.env.TOTAL_COUNT || "0", 10);
-
-            const shouldFail = (
-              (process.env.FAIL_ON_VERIFIED === "true" && verified > 0) ||
-              (process.env.FAIL_ON_UNVERIFIED === "true" && unverified > 0)
-            );
-
-            const conclusion = shouldFail ? "failure" : "success";
-            const title = total > 0
-              ? `Found ${total} potential secrets (${verified} verified, ${unverified} unverified)`
-              : "No secrets detected";
-
-            await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: "TruffleHog Secret Scan",
-              head_sha: context.sha,
-              status: "completed",
-              conclusion,
-              output: {
-                title,
-                summary: "TruffleHog security scan completed",
-                text: `Scan configuration:\n- Type: ${process.env.SCAN_TYPE}\n- Scope: ${process.env.SCAN_SCOPE}\n- Version: ${process.env.TRUFFLEHOG_VERSION || process.env.DEFAULT_VERSION}\n\nResults: ${title}`
-              }
-            });
 
       - name: Create TruffleHog scan artifact
         env:
