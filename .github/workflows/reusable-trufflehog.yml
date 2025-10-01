@@ -198,7 +198,7 @@ jobs:
         id: hide-comments
         uses: int128/hide-comment-action@a30d551065e4231e6d7a671bb5ce884f9ee6417b # v1.43.0
         with:
-          ends-with: "<!-- comment-action/${{ github.workflow }}/${{ github.job }} -->"
+          ends-with: "<!-- trufflehog-secret-scan-comment -->"
 
       - name: Generate formatted scan results for PR comment (verified/unverified secrets)
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
@@ -274,7 +274,7 @@ jobs:
         with:
           post: |
             ${{ steps.comment-body.outputs.body }}
-            ${{ steps.hide-comments.outputs.ends-with }}
+            <!-- trufflehog-secret-scan-comment -->
 
       - name: Create GitHub status check with scan summary (pass/fail)
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
