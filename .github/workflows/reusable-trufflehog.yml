@@ -92,7 +92,20 @@ jobs:
 
           # Simple, aggressive scan - no filtering, no complexity
           echo "Running TruffleHog filesystem scan..."
+          echo "Files being scanned:"
+          find . -name "test-secrets*" -type f
+          echo "Content of test file:"
+          head -5 test-secrets-sample.txt || echo "No test file found"
+
+          # Try different TruffleHog approaches
+          echo "=== Attempt 1: Basic scan ==="
           trufflehog filesystem . --json --no-update > scan-results.json || true
+
+          echo "=== Attempt 2: Specific file scan ==="
+          trufflehog filesystem test-secrets-sample.txt --json --no-update > specific-results.json || true
+
+          echo "=== Attempt 3: All results including unknown ==="
+          trufflehog filesystem . --json --no-update --results=verified,unverified,unknown > all-types-results.json || true
 
           # Count results
           if [[ -s scan-results.json ]]; then
@@ -114,8 +127,12 @@ jobs:
           echo "Total findings: ${TOTAL}"
 
           # Show raw results for debugging
-          echo "Raw scan results:"
-          cat scan-results.json || echo "No raw results"
+          echo "=== Raw scan results (basic) ==="
+          cat scan-results.json || echo "No basic results"
+          echo "=== Raw scan results (specific file) ==="
+          cat specific-results.json || echo "No specific results"
+          echo "=== Raw scan results (all types) ==="
+          cat all-types-results.json || echo "No all-types results"
 
           {
             echo "verified=${VERIFIED}"
