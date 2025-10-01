@@ -97,7 +97,7 @@ jobs:
           # Initialize result files
           echo "[]" > all-results.json
 
-          echo "Starting TruffleHog scan..."
+          echo "Starting TruffleHog scan with scope: ${SCAN_SCOPE}, type: ${SCAN_TYPE}..."
 
           # Full repository scanning
           if [[ "${SCAN_SCOPE}" == "full-repo" || "${SCAN_SCOPE}" == "both" ]]; then
