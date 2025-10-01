@@ -26,5 +26,5 @@ jobs:
       scan-scope: "changed-files"    # PR-focused: only scan changes
       fail-on-verified: "true"       # Always fail on real secrets
       fail-on-unverified: "false"    # Lenient for org-wide adoption
-      runs-on: "ubuntu-latest"       # Standard runner
+      runs-on: "ubuntu-x64-large"    # Large runner for better performance
     secrets: inherit
