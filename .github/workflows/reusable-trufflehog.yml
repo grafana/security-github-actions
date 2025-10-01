@@ -117,12 +117,17 @@ jobs:
 
             if [[ "${SCAN_TYPE}" == "filesystem" || "${SCAN_TYPE}" == "both" ]]; then
               echo "Scanning current filesystem..."
+              echo "Files in current directory:"
+              find . -name "*.txt" -type f | head -10
+              echo "Running TruffleHog filesystem scan..."
               trufflehog filesystem . \
                 --json \
                 --no-update \
                 --results=verified,unverified \
                 --filter-entropy=2.0 \
                 > fs-results.json || true
+              echo "Filesystem scan completed. Results file size:"
+              wc -l fs-results.json || echo "No filesystem results file"
             fi
           fi
 
