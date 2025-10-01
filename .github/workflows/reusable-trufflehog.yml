@@ -198,14 +198,22 @@ jobs:
 
           # Convert NDJSON to JSON array for processing
           if [[ -s all-results.ndjson ]]; then
-            jq -s '.' all-results.ndjson > all-results.json
+            # Filter out empty lines and invalid JSON before processing
+            grep -v '^$' all-results.ndjson | jq -s '.' > all-results.json 2>/dev/null || echo "[]" > all-results.json
           else
             echo "[]" > all-results.json
           fi
 
-          # Count results
-          VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' all-results.json)
-          UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' all-results.json)
+          # Validate JSON and count results with error handling
+          if jq empty all-results.json 2>/dev/null; then
+            VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' all-results.json 2>/dev/null || echo "0")
+            UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' all-results.json 2>/dev/null || echo "0")
+          else
+            echo "Invalid JSON in all-results.json, resetting to empty array"
+            echo "[]" > all-results.json
+            VERIFIED=0
+            UNVERIFIED=0
+          fi
           TOTAL=$((VERIFIED+UNVERIFIED))
 
           echo "Scan Summary:"
@@ -242,9 +250,15 @@ jobs:
             exit 0
           fi
 
-          # Parse results
-          VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' all-results.json)
-          UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' all-results.json)
+          # Parse results with error handling
+          if jq empty all-results.json 2>/dev/null; then
+            VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' all-results.json 2>/dev/null || echo "0")
+            UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' all-results.json 2>/dev/null || echo "0")
+          else
+            echo "Invalid JSON in all-results.json for PR comment"
+            VERIFIED=0
+            UNVERIFIED=0
+          fi
           TOTAL=$((VERIFIED+UNVERIFIED))
 
           if [[ $TOTAL -eq 0 ]]; then
@@ -256,7 +270,7 @@ jobs:
               echo 'EOF'
             } >> "$GITHUB_OUTPUT"
           else
-            # Generate findings list
+            # Generate findings list with error handling
             FINDINGS=$(jq -r '.[] |
               "- " +
               (if .Verified then "**VERIFIED SECRET**" else "**Possible secret**" end) +
@@ -266,7 +280,7 @@ jobs:
               ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) +
               "` → `" +
               (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end) +
-              "`"' all-results.json)
+              "`"' all-results.json 2>/dev/null || echo "- Error processing scan results")
 
             ACTION_TEXT=""
             if [[ $VERIFIED -gt 0 ]]; then
@@ -363,8 +377,8 @@ jobs:
             echo ""
             echo "Detailed Results:"
             echo "=================="
-            if [[ -f "all-results.json" && -s "all-results.json" ]]; then
-              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") + ":" + ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' all-results.json || echo "No detailed results available"
+            if [[ -f "all-results.json" && -s "all-results.json" ]] && jq empty all-results.json 2>/dev/null; then
+              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") + ":" + ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' all-results.json 2>/dev/null || echo "Error processing detailed results"
             else
               echo "No secrets detected"
             fi
