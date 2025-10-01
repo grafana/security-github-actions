@@ -25,7 +25,8 @@ permissions:
   checks: write
 
 env:
-  TRUFFLEHOG_VERSION: 3.82.13 # ratchet:trufflesecurity/trufflehog@v3.82.13
+  # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
+  TRUFFLEHOG_VERSION: 3.82.13
 
 jobs:
   trufflehog-scan:
