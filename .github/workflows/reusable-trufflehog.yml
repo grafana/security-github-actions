@@ -41,8 +41,14 @@ jobs:
 
       - name: Install TruffleHog
         run: |
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
-            | sh -s -- -b /usr/local/bin "v${{ env.TRUFFLEHOG_VERSION }}"
+          # Download binary directly from GitHub releases for supply chain security
+          VERSION="v${{ env.TRUFFLEHOG_VERSION }}"
+          ARCH="linux_amd64"
+          BINARY_URL="https://github.com/trufflesecurity/trufflehog/releases/download/${VERSION}/trufflehog_${VERSION#v}_${ARCH}.tar.gz"
+
+          curl -sSfL "${BINARY_URL}" | tar -xz -C /tmp
+          sudo mv /tmp/trufflehog /usr/local/bin/trufflehog
+          sudo chmod +x /usr/local/bin/trufflehog
           trufflehog --version
 
       - name: Scan for secrets
