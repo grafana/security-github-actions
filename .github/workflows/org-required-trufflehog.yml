@@ -19,7 +19,7 @@ permissions:
 jobs:
   secret-scan:
     name: TruffleHog Secret Scan
-    uses: ./.github/workflows/reusable-trufflehog-simple.yml
+    uses: ./.github/workflows/reusable-trufflehog.yml
     with:
       # Simplified workflow - only what you need
       fail-on-verified: "true"       # Always fail on real secrets

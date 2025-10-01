@@ -3,30 +3,15 @@ name: Reusable TruffleHog Secret Scan
 on:
   workflow_call:
     inputs:
-      fail-on-unverified:
-        description: "Fail workflow on unverified secrets"
-        required: false
-        default: "false"
-        type: string
       fail-on-verified:
         description: "Fail workflow on verified secrets"
         required: false
         default: "true"
         type: string
-      scan-type:
-        description: "Scan type: commits, filesystem, or both"
+      fail-on-unverified:
+        description: "Fail workflow on unverified secrets"
         required: false
-        default: "filesystem"
-        type: string
-      scan-scope:
-        description: "Scan scope: changed-files, full-repo, or both"
-        required: false
-        default: "full-repo"
-        type: string
-      trufflehog-version:
-        description: "TruffleHog version to use (optional override)"
-        required: false
-        default: ""
+        default: "false"
         type: string
       runs-on:
         description: "The runner to use for the job"
@@ -40,7 +25,7 @@ permissions:
   checks: write
 
 env:
-  TRUFFLEHOG_VERSION: "3.75.0" # ratchet:trufflesecurity/trufflehog@v3.75.0
+  TRUFFLEHOG_VERSION: "3.75.0"
 
 jobs:
   trufflehog-scan:
@@ -50,174 +35,76 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
-          # Limited history to reduce credential exposure risk
-          # 100 commits covers most recent development for security scanning
           fetch-depth: 100
           persist-credentials: false
-
-      - name: Set TruffleHog version
-        id: version
-        env:
-          INPUT_VERSION: ${{ inputs.trufflehog-version }}
-          DEFAULT_VERSION: ${{ env.TRUFFLEHOG_VERSION }}
-        run: |
-          if [ -n "${INPUT_VERSION}" ]; then
-            echo "version=${INPUT_VERSION}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "version=v${DEFAULT_VERSION}" >> "${GITHUB_OUTPUT}"
-          fi
 
       - name: Install TruffleHog
         run: |
           curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
-            | sh -s -- -b /usr/local/bin "${{ steps.version.outputs.version }}"
+            | sh -s -- -b /usr/local/bin "v${{ env.TRUFFLEHOG_VERSION }}"
           trufflehog --version
 
-
-      - name: Identify changed files in pull request for targeted scanning
-        id: changed-files
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          git diff --name-only "${BASE_SHA}..${HEAD_SHA}" > changed-files.txt
-          echo "Changed files in this PR:"
-          cat changed-files.txt || echo "No files changed"
-
-      - name: Scan for secrets using TruffleHog
+      - name: Scan for secrets
         id: scan
-        env:
-          SCAN_TYPE: ${{ inputs.scan-type }}
-          SCAN_SCOPE: ${{ inputs.scan-scope }}
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           set +e
+          echo "[]" > results.json
 
-          # Initialize result files
-          echo "[]" > all-results.json
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # PR: Scan only changed files
+            echo "Scanning changed files in PR..."
+            git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.sha }} > changed-files.txt
 
-          echo "Starting TruffleHog scan with scope: ${SCAN_SCOPE}, type: ${SCAN_TYPE}..."
-
-          # Full repository scanning
-          if [[ "${SCAN_SCOPE}" == "full-repo" || "${SCAN_SCOPE}" == "both" ]]; then
-            echo "Running full repository scan..."
-
-            if [[ "${SCAN_TYPE}" == "commits" || "${SCAN_TYPE}" == "both" ]]; then
-              echo "Scanning git commit history..."
-              trufflehog git file://. \
-                --json \
-                --no-update \
-                --results=verified,unverified \
-                --exclude-globs="*.lock,*.sum,node_modules/**,*.git/**" \
-                > commit-results.json || true
+            if [[ -s changed-files.txt ]]; then
+              while IFS= read -r file; do
+                if [[ -f "${file}" ]]; then
+                  echo "Scanning: ${file}"
+                  trufflehog filesystem "${file}" --json --no-update --results=verified,unverified >> results.ndjson || true
+                fi
+              done < changed-files.txt
+            else
+              echo "No files changed"
             fi
-
-            if [[ "${SCAN_TYPE}" == "filesystem" || "${SCAN_TYPE}" == "both" ]]; then
-              echo "Scanning current filesystem..."
-              trufflehog filesystem . \
-                --json \
-                --no-update \
-                --results=verified,unverified \
-                > fs-results.json || true
-            fi
-          fi
-
-          # Changed files scanning (PR only)
-          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            if [[ "${SCAN_SCOPE}" == "changed-files" || "${SCAN_SCOPE}" == "both" ]]; then
-              if [[ -s "changed-files.txt" ]]; then
-                echo "Scanning changed files..."
-                echo "[]" > changed-files-results.json
-                while IFS= read -r file; do
-                  if [[ -f "${file}" ]]; then
-                    echo "Scanning: ${file}"
-                    if trufflehog filesystem "${file}" \
-                        --json \
-                        --no-update \
-                        --results=verified,unverified \
-                        | jq -s 'add' changed-files-results.json - > tmp.json; then
-                      mv tmp.json changed-files-results.json
-                    fi
-                  fi
-                done < changed-files.txt
-              else
-                echo "No changed files to scan"
-              fi
-            fi
-          fi
-
-          # Merge all results
-          touch all-results.ndjson
-          for f in commit-results.json fs-results.json changed-files-results.json; do
-            if [[ -s "${f}" ]]; then
-              cat "${f}" >> all-results.ndjson
-            fi
-          done
-
-          # Convert NDJSON to JSON array for processing
-          if [[ -s all-results.ndjson ]]; then
-            # Filter out empty lines and invalid JSON before processing
-            grep -v '^$' all-results.ndjson | jq -s '.' > all-results.json 2>/dev/null || echo "[]" > all-results.json
           else
-            echo "[]" > all-results.json
+            # Push to main: Scan current filesystem
+            echo "Scanning current filesystem..."
+            trufflehog filesystem . --json --no-update --results=verified,unverified > results.ndjson || true
           fi
 
-          # Validate JSON and count results with error handling
-          if jq empty all-results.json 2>/dev/null; then
-            VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' all-results.json 2>/dev/null || echo "0")
-            UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' all-results.json 2>/dev/null || echo "0")
+          # Process results
+          if [[ -s results.ndjson ]]; then
+            grep -v '^$' results.ndjson | jq -s '.' > results.json 2>/dev/null || echo "[]" > results.json
+          fi
+
+          # Count secrets
+          if jq empty results.json 2>/dev/null; then
+            VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' results.json 2>/dev/null || echo "0")
+            UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' results.json 2>/dev/null || echo "0")
           else
-            echo "Invalid JSON in all-results.json, resetting to empty array"
-            echo "[]" > all-results.json
             VERIFIED=0
             UNVERIFIED=0
+            echo "[]" > results.json
           fi
+
           TOTAL=$((VERIFIED+UNVERIFIED))
+          echo "Found ${TOTAL} potential secrets (${VERIFIED} verified, ${UNVERIFIED} unverified)"
 
-          echo "Scan Summary:"
-          echo "Verified secrets: ${VERIFIED}"
-          echo "Unverified secrets: ${UNVERIFIED}"
-          echo "Total findings: ${TOTAL}"
+          echo "verified=${VERIFIED}" >> "${GITHUB_OUTPUT}"
+          echo "unverified=${UNVERIFIED}" >> "${GITHUB_OUTPUT}"
+          echo "total=${TOTAL}" >> "${GITHUB_OUTPUT}"
 
-          {
-            echo "verified=${VERIFIED}"
-            echo "unverified=${UNVERIFIED}"
-            echo "total=${TOTAL}"
-          } >> "${GITHUB_OUTPUT}"
-
-      - name: Hide/minimize previous TruffleHog scan result comments on PR
+      - name: Hide previous TruffleHog comments
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
-        id: hide-comments
         uses: int128/hide-comment-action@a30d551065e4231e6d7a671bb5ce884f9ee6417b # v1.43.0
         with:
           ends-with: "<!-- trufflehog-secret-scan-comment -->"
 
-      - name: Generate formatted scan results for PR comment (verified/unverified secrets)
+      - name: Generate PR comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
         id: comment-body
         run: |
-          if [[ ! -f "all-results.json" || ! -s "all-results.json" ]]; then
-            echo "No results file found"
-            {
-              echo 'body<<EOF'
-              echo '**TruffleHog Scan Results**'
-              echo ''
-              echo 'No secrets detected in this PR.'
-              echo 'EOF'
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Parse results with error handling
-          if jq empty all-results.json 2>/dev/null; then
-            VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' all-results.json 2>/dev/null || echo "0")
-            UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' all-results.json 2>/dev/null || echo "0")
-          else
-            echo "Invalid JSON in all-results.json for PR comment"
-            VERIFIED=0
-            UNVERIFIED=0
-          fi
+          VERIFIED=${{ steps.scan.outputs.verified }}
+          UNVERIFIED=${{ steps.scan.outputs.unverified }}
           TOTAL=$((VERIFIED+UNVERIFIED))
 
           if [[ $TOTAL -eq 0 ]]; then
@@ -229,7 +116,7 @@ jobs:
               echo 'EOF'
             } >> "$GITHUB_OUTPUT"
           else
-            # Generate findings list with error handling
+            # Generate findings list
             FINDINGS=$(jq -r '.[] |
               "- " +
               (if .Verified then "**VERIFIED SECRET**" else "**Possible secret**" end) +
@@ -239,7 +126,7 @@ jobs:
               ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) +
               "` → `" +
               (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end) +
-              "`"' all-results.json 2>/dev/null || echo "- Error processing scan results")
+              "`"' results.json 2>/dev/null || echo "- Error processing results")
 
             ACTION_TEXT=""
             if [[ $VERIFIED -gt 0 ]]; then
@@ -261,7 +148,7 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Post TruffleHog scan results as PR comment
+      - name: Post PR comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
         uses: int128/comment-action@f4faf53666ef83da7d274fa2007e9212c4d719c3 # v1.39.0
         with:
@@ -269,40 +156,32 @@ jobs:
             ${{ steps.comment-body.outputs.body }}
             <!-- trufflehog-secret-scan-comment -->
 
-
-      - name: Create TruffleHog scan artifact
+      - name: Create scan report
         env:
-          REPOSITORY: ${{ github.repository }}
-          BRANCH: ${{ github.ref_name }}
-          COMMIT: ${{ github.sha }}
-          TOTAL_SECRETS: ${{ steps.scan.outputs.total }}
-          VERIFIED_SECRETS: ${{ steps.scan.outputs.verified }}
-          UNVERIFIED_SECRETS: ${{ steps.scan.outputs.unverified }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
-          # Create a comprehensive scan report
           {
             echo "TruffleHog Scan Report"
             echo "====================="
-            echo "Scan Date: $(date)"
-            echo "Repository: ${REPOSITORY}"
-            echo "Branch: ${BRANCH}"
-            echo "Commit: ${COMMIT}"
+            echo "Date: $(date)"
+            echo "Repository: ${{ github.repository }}"
+            echo "Branch: ${GITHUB_REF_NAME}"
+            echo "Commit: ${{ github.sha }}"
             echo ""
             echo "Summary:"
-            echo "- Total secrets found: ${TOTAL_SECRETS}"
-            echo "- Verified secrets: ${VERIFIED_SECRETS}"
-            echo "- Unverified secrets: ${UNVERIFIED_SECRETS}"
+            echo "- Total secrets: ${{ steps.scan.outputs.total }}"
+            echo "- Verified: ${{ steps.scan.outputs.verified }}"
+            echo "- Unverified: ${{ steps.scan.outputs.unverified }}"
             echo ""
             echo "Detailed Results:"
-            echo "=================="
-            if [[ -f "all-results.json" && -s "all-results.json" ]] && jq empty all-results.json 2>/dev/null; then
-              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") + ":" + ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' all-results.json 2>/dev/null || echo "Error processing detailed results"
+            if [[ -f "results.json" && -s "results.json" ]] && jq empty results.json 2>/dev/null; then
+              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") + ":" + ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' results.json 2>/dev/null || echo "Error processing results"
             else
               echo "No secrets detected"
             fi
           } > trufflehog_scan.txt
 
-      - name: Upload TruffleHog scan results as artifact
+      - name: Upload scan results
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -310,28 +189,24 @@ jobs:
           path: trufflehog_scan.txt
           retention-days: 30
 
-      - name: Fail workflow based on secret detection policy (verified/unverified thresholds)
+      - name: Check failure policy
         env:
-          VERIFIED_COUNT: ${{ steps.scan.outputs.verified }}
-          UNVERIFIED_COUNT: ${{ steps.scan.outputs.unverified }}
           FAIL_ON_VERIFIED: ${{ inputs.fail-on-verified }}
           FAIL_ON_UNVERIFIED: ${{ inputs.fail-on-unverified }}
+          VERIFIED_COUNT: ${{ steps.scan.outputs.verified }}
+          UNVERIFIED_COUNT: ${{ steps.scan.outputs.unverified }}
         run: |
           SHOULD_FAIL=false
-
           if [[ "${FAIL_ON_VERIFIED}" == "true" && "${VERIFIED_COUNT}" != "0" ]]; then
             SHOULD_FAIL=true
           fi
-
           if [[ "${FAIL_ON_UNVERIFIED}" == "true" && "${UNVERIFIED_COUNT}" != "0" ]]; then
             SHOULD_FAIL=true
           fi
 
           if [[ "${SHOULD_FAIL}" == "true" ]]; then
-            echo "Workflow failed due to secrets found"
-            echo "Verified secrets: ${VERIFIED_COUNT}"
-            echo "Unverified secrets: ${UNVERIFIED_COUNT}"
+            echo "Workflow failed due to secrets found (verified: ${VERIFIED_COUNT}, unverified: ${UNVERIFIED_COUNT})"
             exit 1
           else
-            echo "No action needed - secrets found but within configured thresholds"
+            echo "No action needed - secrets within configured thresholds"
           fi
