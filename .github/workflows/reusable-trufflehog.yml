@@ -33,6 +33,11 @@ on:
         required: false
         default: "true"
         type: string
+      runs-on:
+        description: "The runner to use for the job"
+        required: false
+        default: "ubuntu-latest"
+        type: string
 
 permissions:
   contents: read
@@ -44,7 +49,7 @@ env:
 
 jobs:
   trufflehog-scan:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
 
     steps:
       - name: Checkout repository
