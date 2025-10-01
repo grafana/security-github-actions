@@ -1,0 +1,30 @@
+name: Organization Required - TruffleHog Secret Scan
+
+# This workflow is designed to be enforced org-wide via GitHub rulesets
+# It calls the reusable TruffleHog workflow with sensible defaults for org-wide deployment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  secret-scan:
+    name: TruffleHog Secret Scan
+    uses: ./.github/workflows/reusable-trufflehog.yml
+    with:
+      # Optimized settings for org-wide deployment
+      scan-type: "filesystem"        # Fast: current files only
+      scan-scope: "changed-files"    # PR-focused: only scan changes
+      fail-on-verified: "true"       # Always fail on real secrets
+      fail-on-unverified: "false"    # Lenient for org-wide adoption
+      runs-on: "ubuntu-latest"       # Standard runner
+    secrets: inherit
