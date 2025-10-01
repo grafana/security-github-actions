@@ -22,7 +22,6 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  checks: write
 
 env:
   # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
