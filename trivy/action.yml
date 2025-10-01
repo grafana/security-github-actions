@@ -13,12 +13,12 @@ runs:
   using: "composite"
   steps:
     - name: "Checkout Repository"
-      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # 4.3.0
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # 5.0.0
       with:
         fetch-depth: 0
     
     - name: "Checkout Target Branch"
-      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # 4.3.0
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # 5.0.0
       with:
         ref: ${{ github.base_ref }}
     
@@ -37,7 +37,7 @@ runs:
         severity: ${{ inputs.severities }}
     
     - name: Checkout current commit
-      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # 4.3.0
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # 5.0.0
       with:
         ref: ${{ github.sha }}
         clean: false
