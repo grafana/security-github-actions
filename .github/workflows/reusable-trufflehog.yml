@@ -109,8 +109,7 @@ jobs:
                 --json \
                 --no-update \
                 --results=verified,unverified \
-                --filter-unverified \
-                --filter-entropy=3.0 \
+                --filter-entropy=2.0 \
                 --max-depth=10 \
                 --exclude-globs="*.lock,*.sum,node_modules/**,*.git/**" \
                 > commit-results.json || true
@@ -122,8 +121,7 @@ jobs:
                 --json \
                 --no-update \
                 --results=verified,unverified \
-                --filter-unverified \
-                --filter-entropy=3.0 \
+                --filter-entropy=2.0 \
                 > fs-results.json || true
             fi
           fi
@@ -141,8 +139,7 @@ jobs:
                         --json \
                         --no-update \
                         --results=verified,unverified \
-                        --filter-unverified \
-                        --filter-entropy=3.0 \
+                        --filter-entropy=2.0 \
                         | jq -s 'add' changed-files-results.json - > tmp.json; then
                       mv tmp.json changed-files-results.json
                     fi
