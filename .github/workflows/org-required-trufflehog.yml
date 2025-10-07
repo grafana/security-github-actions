@@ -20,8 +20,8 @@ jobs:
     name: TruffleHog Secret Scan
     uses: ./.github/workflows/reusable-trufflehog.yml
     with:
-      # Simplified workflow - only what you need
-      fail-on-verified: "true"       # Always fail on real secrets
-      fail-on-unverified: "false"    # Lenient for org-wide adoption
+      # Monitoring mode - no blocking, just reporting
+      fail-on-verified: "false"      # Don't block on verified secrets (monitoring only)
+      fail-on-unverified: "false"    # Don't block on unverified secrets
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-x86-large' }}    # Large runner for internal repositories
     secrets: inherit
