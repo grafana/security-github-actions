@@ -18,7 +18,7 @@ permissions:
 jobs:
   secret-scan:
     name: TruffleHog Secret Scan
-    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@fix/update-runner-to-x64-large
+    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@main
     with:
       # Monitoring mode - no blocking, just reporting
       fail-on-verified: "false"      # Don't block on verified secrets (monitoring only)
