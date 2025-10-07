@@ -23,5 +23,5 @@ jobs:
       # Monitoring mode - no blocking, just reporting
       fail-on-verified: "false"      # Don't block on verified secrets (monitoring only)
       fail-on-unverified: "false"    # Don't block on unverified secrets
-      runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-x86-large' }}    # Large runner for internal repositories
+      runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # Use same runner pattern as zizmor
     secrets: inherit
