@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - ".github/**"
+  merge_group:
+    types: [checks_requested]
 jobs:
   zizmor-check:
     name: Check whether there are things to scan
