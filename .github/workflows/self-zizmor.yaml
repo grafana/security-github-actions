@@ -9,6 +9,7 @@ on:
       - opened
       - ready_for_review
       - synchronize
+      - reopened
     paths:
       - ".github/**"
   merge_group:
