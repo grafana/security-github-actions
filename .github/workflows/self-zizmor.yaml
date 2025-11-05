@@ -4,6 +4,11 @@ on:
     paths:
       - ".github/**"
   pull_request:
+    types:
+      - edited
+      - opened
+      - ready_for_review
+      - synchronize
     paths:
       - ".github/**"
   merge_group:
