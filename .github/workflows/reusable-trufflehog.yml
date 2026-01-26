@@ -104,12 +104,6 @@ jobs:
           echo "unverified=${UNVERIFIED}" >> "${GITHUB_OUTPUT}"
           echo "total=${TOTAL}" >> "${GITHUB_OUTPUT}"
 
-      - name: Hide previous TruffleHog comments
-        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
-        uses: int128/hide-comment-action@a30d551065e4231e6d7a671bb5ce884f9ee6417b # v1.43.0
-        with:
-          ends-with: "<!-- trufflehog-secret-scan-comment -->"
-
       - name: Generate PR comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
         id: comment-body
@@ -161,11 +155,13 @@ jobs:
 
       - name: Post PR comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
-        uses: int128/comment-action@f4faf53666ef83da7d274fa2007e9212c4d719c3 # v1.39.0
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2.8.2
         with:
-          post: |
+          # We retain the final trufflehog-secret-scan-comment marker in case we want to chang the action to another one.
+          message: |
             ${{ steps.comment-body.outputs.body }}
             <!-- trufflehog-secret-scan-comment -->
+          message-id: trufflehog-secret-scan-comment
 
       - name: Create scan report
         env:
