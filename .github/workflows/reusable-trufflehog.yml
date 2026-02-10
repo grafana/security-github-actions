@@ -85,6 +85,9 @@ jobs:
           # Process results
           if [[ -s results.ndjson ]]; then
             grep -v '^$' results.ndjson | jq -s '.' > results.json 2>/dev/null || echo "[]" > results.json
+          else
+            # Ensure results.json exists even if no results
+            echo "[]" > results.json
           fi
 
           # Count secrets
@@ -204,6 +207,16 @@ jobs:
           else
             echo "❌ results.json does not exist"
           fi
+
+      - name: Ensure results.json exists
+        if: always()
+        run: |
+          if [[ ! -f "results.json" ]]; then
+            echo "[]" > results.json
+            echo "Created empty results.json"
+          fi
+          echo "Files to upload:"
+          ls -la results.json trufflehog_scan.txt 2>/dev/null || echo "Some files missing"
 
       - name: Upload scan results
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
