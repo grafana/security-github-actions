@@ -208,24 +208,29 @@ jobs:
             echo "❌ results.json does not exist"
           fi
 
-      - name: Ensure results.json exists
+      - name: Prepare artifacts for upload
         if: always()
         run: |
+          # Ensure results.json exists
           if [[ ! -f "results.json" ]]; then
             echo "[]" > results.json
             echo "Created empty results.json"
           fi
-          echo "Files to upload:"
-          ls -la results.json trufflehog_scan.txt 2>/dev/null || echo "Some files missing"
+          
+          # Create artifacts directory and copy files
+          mkdir -p trufflehog-artifacts
+          cp trufflehog_scan.txt trufflehog-artifacts/ 2>/dev/null || echo "trufflehog_scan.txt not found"
+          cp results.json trufflehog-artifacts/ 2>/dev/null || echo "results.json not found"
+          
+          echo "Files in artifacts directory:"
+          ls -la trufflehog-artifacts/
 
       - name: Upload scan results
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         if: always()
         with:
           name: trufflehog_scan
-          path: |
-            trufflehog_scan.txt
-            results.json
+          path: trufflehog-artifacts/
           retention-days: 30
 
       - name: Setup Python for Grafana integration
