@@ -216,14 +216,30 @@ jobs:
             echo "[]" > results.json
             echo "Created empty results.json"
           fi
-          
+
           # Create artifacts directory and copy files
           mkdir -p trufflehog-artifacts
-          cp trufflehog_scan.txt trufflehog-artifacts/ 2>/dev/null || echo "trufflehog_scan.txt not found"
-          cp results.json trufflehog-artifacts/ 2>/dev/null || echo "results.json not found"
-          
+
+          # Copy text report
+          if [[ -f "trufflehog_scan.txt" ]]; then
+            cp trufflehog_scan.txt trufflehog-artifacts/
+            echo "✓ Copied trufflehog_scan.txt"
+          else
+            echo "⚠ trufflehog_scan.txt not found"
+          fi
+
+          # Copy JSON results
+          if [[ -f "results.json" ]]; then
+            cp results.json trufflehog-artifacts/
+            echo "✓ Copied results.json"
+          else
+            echo "⚠ results.json not found, creating empty one"
+            echo "[]" > trufflehog-artifacts/results.json
+          fi
+
+          echo ""
           echo "Files in artifacts directory:"
-          ls -la trufflehog-artifacts/
+          ls -lah trufflehog-artifacts/
 
       - name: Upload scan results
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
