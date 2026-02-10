@@ -197,8 +197,47 @@ jobs:
         if: always()
         with:
           name: trufflehog_scan
-          path: trufflehog_scan.txt
+          path: |
+            trufflehog_scan.txt
+            results.json
           retention-days: 30
+
+      - name: Setup Python for Grafana integration
+        if: ${{ !cancelled() && (secrets.LOKI_URL != '' || secrets.PROMETHEUS_PUSHGATEWAY_URL != '') }}
+        uses: actions/setup-python@0b6a380b5a7827e48e69b2e0e596c5c8c2b0e0b0 # v5.1.0
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies
+        if: ${{ !cancelled() && (secrets.LOKI_URL != '' || secrets.PROMETHEUS_PUSHGATEWAY_URL != '') }}
+        run: |
+          pip install requests
+
+      - name: Send findings to Loki
+        if: ${{ !cancelled() && secrets.LOKI_URL != '' }}
+        continue-on-error: true
+        env:
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_USERNAME: ${{ secrets.LOKI_USERNAME }}
+          LOKI_PASSWORD: ${{ secrets.LOKI_PASSWORD }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          TRUFFLEHOG_RESULTS_FILE: results.json
+        run: |
+          python trufflehog/send-to-loki.py
+
+      - name: Send metrics to Prometheus
+        if: ${{ !cancelled() && secrets.PROMETHEUS_PUSHGATEWAY_URL != '' }}
+        continue-on-error: true
+        env:
+          PROMETHEUS_PUSHGATEWAY_URL: ${{ secrets.PROMETHEUS_PUSHGATEWAY_URL }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          TRUFFLEHOG_RESULTS_FILE: results.json
+        run: |
+          python trufflehog/send-to-prometheus.py
 
       - name: Check failure policy
         env:
