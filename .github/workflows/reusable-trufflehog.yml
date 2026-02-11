@@ -1,5 +1,5 @@
 name: Reusable TruffleHog Secret Scan
-
+ 
 on:
   workflow_call:
     inputs:
