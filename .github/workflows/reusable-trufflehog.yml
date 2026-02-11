@@ -193,7 +193,10 @@ jobs:
         if: always()
         with:
           name: trufflehog_scan
-          path: trufflehog_scan.txt
+          path: |
+            trufflehog_scan.txt
+            results.json
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Check failure policy
