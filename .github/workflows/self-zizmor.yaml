@@ -111,7 +111,7 @@ jobs:
       - uses: int128/comment-action@66317511bc86c47bd51e03059040e8a460a167b8
         if: ${{ steps.action-detection.outputs.output_message != '' }}
         with:
-          update-if-exists: recreate
+          update-if-exists: replace
           post: |
             ${{ steps.action-detection.outputs.output_message }}
   zizmor:
