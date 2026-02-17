@@ -76,20 +76,24 @@ jobs:
               message=$(echo "$action_obj" | jq -r '.message')
               [[ -z "$action" ]] && continue
               if grep -q "uses:.*$action" "$file"; then
-                output_message=$(cat <<EOF
-                ## 👀 Watched Action Detected
+                  output_message=$(cat <<EOF
+                  ## 👀 Watched Action Detected
 
-                **File:** $file  
-                **Action:** $action  
+                  **File:** $file  
+                  **Action:** $action  
 
-                ### 📝 Details
-                $message
-                EOF
+                  ### 📝 Details
+                  $message
+                  EOF
                 )
               fi
             done
           done
-          echo "output_message=${output_message}" >> $GITHUB_OUTPUT
+          {
+            echo "output_message<<EOF"
+            cat <<$output_message
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
       - uses: int128/comment-action@66317511bc86c47bd51e03059040e8a460a167b8
         if: ${{ steps.action-detection.outputs.output_message != '' }}
         with:
