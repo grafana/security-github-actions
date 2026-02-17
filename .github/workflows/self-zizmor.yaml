@@ -57,7 +57,10 @@ jobs:
             echo "::error::WATCHED_ACTIONS is not valid JSON"
             exit 1
           fi
+
           mapfile -t watched_actions < <(echo "$WATCHED_ACTIONS" | jq -c '.[]')
+
+          # Find workflow/action files
           workflow_files=()
           while IFS= read -r file; do
             workflow_files+=("$file")
@@ -69,31 +72,42 @@ jobs:
               -path "*/action.yaml" \
             \) 2>/dev/null || true
           )
+
+          # Initialize output
           output_message=""
+
+          # Check for watched actions
           for file in "${workflow_files[@]}"; do
             for action_obj in "${watched_actions[@]}"; do
               action=$(echo "$action_obj" | jq -r '.action')
               message=$(echo "$action_obj" | jq -r '.message')
               [[ -z "$action" ]] && continue
+
               if grep -q "uses:.*$action" "$file"; then
-                  output_message=$(cat <<EOF
-                  ## 👀 Watched Action Detected
+                # Append, do not overwrite
+                output_message+=$(cat <<EOF
 
-                  **File:** $file  
-                  **Action:** $action  
+          ## 👀 Watched Action Detected
 
-                  ### 📝 Details
-                  $message
-                  EOF
-                )
+          **File:** $file  
+          **Action:** $action  
+
+          ### 📝 Details
+          $message
+
+          EOF
+          )
               fi
             done
           done
-          {
-            echo "output_message<<EOF"
-            cat <<$output_message
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+
+          # Write to GitHub Actions output only if there is a message
+          if [[ -n "$output_message" ]]; then
+            echo "output_message<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$output_message" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: int128/comment-action@66317511bc86c47bd51e03059040e8a460a167b8
         if: ${{ steps.action-detection.outputs.output_message != '' }}
         with:
