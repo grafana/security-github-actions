@@ -51,7 +51,8 @@ jobs:
           WATCHED_ACTIONS: ${{ env.WATCHED_ACTIONS }}
         run: |
           echo "::notice::Scanning for watched GitHub actions..."
-
+          echo "RAW WATCHED_ACTIONS:"
+          printf '%q\n' "$WATCHED_ACTIONS"
           # Skip if not configured
           if [[ -z "$WATCHED_ACTIONS" ]]; then
             echo "::notice::No WATCHED_ACTIONS configured"
