@@ -76,21 +76,21 @@ jobs:
               [[ -z "$action" ]] && continue
               if grep -q "uses:.*$action" "$file"; then
                 if [[ "$message" != "null" && -n "$message" ]]; then
-                  output_message="::warning file=$file::Detected watched action '$action': $message\n"+output_message
+                  output_message="file=$file::Detected watched action '$action': $message\n"+output_message
                 else
-                  output_message="::warning file=$file::Detected watched action '$action'\n"+output_message
+                  output_message="file=$file::Detected watched action '$action'\n"+output_message
                 fi
               fi
             done
           done
           echo "output_message=${output_message}" >> $GITHUB_OUTPUT
       - name: Add comment
-        run: gh issue comment "$NUMBER" --body "$BODY"
+        run: gh pr comment "$NUMBER" --body "$BODY"
         if: ${{ steps.action-detection.outputs.output_message != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          NUMBER: ${{ github.event.issue.number }}
+          NUMBER: ${{ github.event.pr.number }}
           BODY: >
             ${{ steps.action-detection.outputs.output_message }}
   zizmor:
