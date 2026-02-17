@@ -89,7 +89,7 @@ jobs:
               [[ -z "$action" ]] && continue
 
               if grep -q "uses:.*$action" "$file"; then
-                ((detected_count++))
+                detected_count=$((detected_count + 1))
                 if [[ "$message" != "null" && -n "$message" ]]; then
                   echo "::warning file=$file::Detected watched action '$action': $message"
                 else
