@@ -26,7 +26,7 @@ jobs:
   zizmor-check:
     name: Check whether there are things to scan
     permissions:
-      contents: read
+      contents: write
     runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
     outputs:
       found-files: ${{ steps.zizmor-check.outputs.found-files }}
