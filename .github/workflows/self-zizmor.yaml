@@ -84,14 +84,10 @@ jobs:
             done
           done
           echo "output_message=${output_message}" >> $GITHUB_OUTPUT
-      - name: Add comment
-        run: gh pr comment "$NUMBER" --body "$BODY"
+      - uses: int128/comment-action@66317511bc86c47bd51e03059040e8a460a167b8
         if: ${{ steps.action-detection.outputs.output_message != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          NUMBER: ${{ github.event.number }}
-          BODY: >
+        with:
+          post: |
             ${{ steps.action-detection.outputs.output_message }}
   zizmor:
     name: Run zizmor from current branch (self test)
