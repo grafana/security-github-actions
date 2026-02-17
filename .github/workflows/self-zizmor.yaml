@@ -76,11 +76,16 @@ jobs:
               message=$(echo "$action_obj" | jq -r '.message')
               [[ -z "$action" ]] && continue
               if grep -q "uses:.*$action" "$file"; then
-                  output_message="## 👀 Watched Action Detected \n\n"
-                  output_message+="**File:** $file \n"
-                  output_message+="**Action:** $action \n"
-                  output_message+="### 📝 Details \n"
-                  output_message+="$message"
+                output_message=$(cat <<EOF
+                ## 👀 Watched Action Detected
+
+                **File:** $file  
+                **Action:** $action  
+
+                ### 📝 Details
+                $message
+                EOF
+                )
               fi
             done
           done
