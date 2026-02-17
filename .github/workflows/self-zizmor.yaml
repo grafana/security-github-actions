@@ -45,28 +45,18 @@ jobs:
           echo "found-files=${FOUND_FILES}" >> $GITHUB_OUTPUT
 
       - name: Detect specific GitHub actions
+        id: action-detection
         if: steps.zizmor-check.outputs.found-files == 'true'
         shell: bash
         env:
           WATCHED_ACTIONS: ${{ env.WATCHED_ACTIONS }}
         run: |
-          echo "::notice::Scanning for watched GitHub actions..."
-          echo "RAW WATCHED_ACTIONS:"
-          printf '%q\n' "$WATCHED_ACTIONS"
-          # Skip if not configured
-          if [[ -z "$WATCHED_ACTIONS" ]]; then
-            echo "::notice::No WATCHED_ACTIONS configured"
-            exit 0
-          fi
-
           # Validate JSON
           if ! echo "$WATCHED_ACTIONS" | jq empty; then
             echo "::error::WATCHED_ACTIONS is not valid JSON"
             exit 1
           fi
-
           mapfile -t watched_actions < <(echo "$WATCHED_ACTIONS" | jq -c '.[]')
-
           workflow_files=()
           while IFS= read -r file; do
             workflow_files+=("$file")
@@ -78,33 +68,31 @@ jobs:
               -path "*/action.yaml" \
             \) 2>/dev/null || true
           )
-
-          detected_count=0
-
+          output_message=""
           for file in "${workflow_files[@]}"; do
             for action_obj in "${watched_actions[@]}"; do
               action=$(echo "$action_obj" | jq -r '.action')
               message=$(echo "$action_obj" | jq -r '.message')
-
               [[ -z "$action" ]] && continue
-
               if grep -q "uses:.*$action" "$file"; then
-                detected_count=$((detected_count + 1))
                 if [[ "$message" != "null" && -n "$message" ]]; then
-                  echo "::warning file=$file::Detected watched action '$action': $message"
+                  output_message="::warning file=$file::Detected watched action '$action': $message\n"+output_message
                 else
-                  echo "::warning file=$file::Detected watched action: $action"
+                  output_message="::warning file=$file::Detected watched action '$action'\n"+output_message
                 fi
               fi
             done
           done
-
-          if [ "$detected_count" -gt 0 ]; then
-            echo "::warning::Found $detected_count instance(s) of watched GitHub actions"
-          else
-            echo "::notice::No watched GitHub actions detected"
-          fi
-
+          echo "output_message=${output_message}" >> $GITHUB_OUTPUT
+      - name: Add comment
+        run: gh issue comment "$NUMBER" --body "$BODY"
+        if: ${{ steps.action-detection.outputs.output_message != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          BODY: >
+            ${{ steps.action-detection.outputs.output_message }}
   zizmor:
     name: Run zizmor from current branch (self test)
 
