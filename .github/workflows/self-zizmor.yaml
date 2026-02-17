@@ -76,11 +76,13 @@ jobs:
               message=$(echo "$action_obj" | jq -r '.message')
               [[ -z "$action" ]] && continue
               if grep -q "uses:.*$action" "$file"; then
-                if [[ "$message" != "null" && -n "$message" ]]; then
-                  output_message="file=$file::Detected watched action '$action': $message\n"+output_message
-                else
-                  output_message="file=$file::Detected watched action '$action'\n"+output_message
-                fi
+                  output_message="## 👀 Watched Action Detected"$'\n\n'
+                  output_message+="**File:** \`$file\`"$'\n'
+                  output_message+="**Action:** \`$action\`"$'\n\n'
+                  output_message+="### 📝 Details"$'\n'
+                  output_message+="$message"$'\n\n'
+                  output_message+="---"$'\n'
+                  output_message+="_Generated automatically by workflow._"
               fi
             done
           done
