@@ -90,7 +90,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          NUMBER: ${{ github.event.pull_request.number }}
+          NUMBER: ${{ github.event.number }}
           BODY: >
             ${{ steps.action-detection.outputs.output_message }}
   zizmor:
