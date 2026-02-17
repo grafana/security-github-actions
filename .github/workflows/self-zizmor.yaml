@@ -18,7 +18,7 @@ env:
     [
       {
         "action": "actions/create-github-app-token",
-        "message": "This action will be deprecated. Please migrate to GitHub App Token Broker: https://enghub.grafana-ops.net/docs/default/component/deployment-tools/platform/vault/github-app-token-broker-migration-guide/"
+        "message": "This action will be deprecated. Please migrate using [GitHub App Token Broker Migration Guide](https://enghub.grafana-ops.net/docs/default/component/deployment-tools/platform/vault/github-app-token-broker-migration-guide/)"
       }
     ]
 
