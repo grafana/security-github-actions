@@ -109,7 +109,7 @@ jobs:
         id: check-comment
         run: |
           # Check if a TruffleHog comment already exists on this PR
-          COMMENT_ID=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '.comments[] | select(.body | contains("<!-- trufflehog-secret-scan-comment -->")) | .id' | head -1 || echo "")
+          COMMENT_ID=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '.comments[] | select(.body | contains("<!-- trufflehog-secret-scan-comment -->")) | .databaseId' | head -1 || echo "")
 
           if [[ -n "$COMMENT_ID" ]]; then
             echo "exists=true" >> "${GITHUB_OUTPUT}"
