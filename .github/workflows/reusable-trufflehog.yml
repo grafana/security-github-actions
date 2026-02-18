@@ -213,7 +213,7 @@ jobs:
             trufflehog_scan.txt
             results.json
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 2
 
       - name: Check failure policy
         env:
