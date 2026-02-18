@@ -104,6 +104,34 @@ jobs:
           echo "unverified=${UNVERIFIED}" >> "${GITHUB_OUTPUT}"
           echo "total=${TOTAL}" >> "${GITHUB_OUTPUT}"
 
+      - name: Check for existing comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        id: check-comment
+        run: |
+          # Check if a TruffleHog comment already exists on this PR
+          COMMENT_ID=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '.comments[] | select(.body | contains("<!-- trufflehog-secret-scan-comment -->")) | .id' | head -1 || echo "")
+
+          if [[ -n "$COMMENT_ID" ]]; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+            echo "comment_id=${COMMENT_ID}" >> "${GITHUB_OUTPUT}"
+            echo "Found existing TruffleHog comment ID: ${COMMENT_ID}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+            echo "comment_id=" >> "${GITHUB_OUTPUT}"
+            echo "No existing TruffleHog comment found"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Delete resolved comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total == '0' && steps.check-comment.outputs.exists == 'true' }}
+        run: |
+          echo "Secrets resolved - deleting previous warning comment"
+          gh api -X DELETE /repos/${{ github.repository }}/issues/comments/${{ steps.check-comment.outputs.comment_id }}
+          echo "Comment deleted successfully"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Generate PR comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total > 0 }}
         id: comment-body
