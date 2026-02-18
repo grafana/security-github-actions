@@ -107,23 +107,15 @@ jobs:
       - name: Delete resolved comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total == '0' }}
         run: |
-          set -x  # Enable debug mode
-
-          echo "=== Debugging: Listing all comments on PR #${{ github.event.pull_request.number }} ==="
-          gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | "ID: \(.id) | Preview: \(.body[0:100])"' || echo "No comments or API error"
-
-          echo ""
-          echo "=== Searching for TruffleHog comment with marker ==="
+          # Find and delete TruffleHog comment if secrets have been resolved
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | select(.body | contains("<!-- trufflehog-secret-scan-comment -->")) | .id' | head -1 || echo "")
 
-          echo "COMMENT_ID result: '${COMMENT_ID}'"
-
           if [[ -n "$COMMENT_ID" ]]; then
-            echo "Found existing comment ID: ${COMMENT_ID}"
-            echo "Attempting to delete..."
-            gh api -X DELETE /repos/${{ github.repository }}/issues/comments/${COMMENT_ID} && echo "✓ Deleted successfully" || echo "✗ Delete failed"
+            echo "Secrets resolved - deleting previous warning comment (ID: ${COMMENT_ID})"
+            gh api -X DELETE /repos/${{ github.repository }}/issues/comments/${COMMENT_ID}
+            echo "Comment deleted successfully"
           else
-            echo "No TruffleHog comment found to delete"
+            echo "No existing TruffleHog comment to delete"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
