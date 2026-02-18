@@ -35,7 +35,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
-          fetch-depth: 100
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install TruffleHog
@@ -104,8 +104,24 @@ jobs:
           echo "unverified=${UNVERIFIED}" >> "${GITHUB_OUTPUT}"
           echo "total=${TOTAL}" >> "${GITHUB_OUTPUT}"
 
+      - name: Delete resolved comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total == '0' }}
+        run: |
+          # Find and delete TruffleHog comment if secrets have been resolved
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | select(.body | contains("<!-- trufflehog-secret-scan-comment -->")) | .id' | head -1 || echo "")
+
+          if [[ -n "$COMMENT_ID" ]]; then
+            echo "Secrets resolved - deleting previous warning comment (ID: ${COMMENT_ID})"
+            gh api -X DELETE /repos/${{ github.repository }}/issues/comments/${COMMENT_ID}
+            echo "Comment deleted successfully"
+          else
+            echo "No existing TruffleHog comment to delete"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Generate PR comment
-        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total > 0 }}
         id: comment-body
         run: |
           VERIFIED=${{ steps.scan.outputs.verified }}
@@ -115,9 +131,9 @@ jobs:
           if [[ $TOTAL -eq 0 ]]; then
             {
               echo 'body<<EOF'
-              echo '**TruffleHog Scan Results**'
+              echo '**TruffleHog Scan Results** ✅'
               echo ''
-              echo 'No secrets detected in this PR.'
+              echo 'No secrets detected. All clear!'
               echo 'EOF'
             } >> "$GITHUB_OUTPUT"
           else
@@ -154,7 +170,7 @@ jobs:
           fi
 
       - name: Post PR comment
-        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total > 0 }}
         uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2.8.2
         with:
           # We retain the final trufflehog-secret-scan-comment marker in case we want to chang the action to another one.
@@ -197,7 +213,7 @@ jobs:
             trufflehog_scan.txt
             results.json
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 2
 
       - name: Check failure policy
         env:
