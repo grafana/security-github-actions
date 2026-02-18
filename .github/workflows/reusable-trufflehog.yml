@@ -115,9 +115,9 @@ jobs:
           if [[ $TOTAL -eq 0 ]]; then
             {
               echo 'body<<EOF'
-              echo '**TruffleHog Scan Results**'
+              echo '**TruffleHog Scan Results** ✅'
               echo ''
-              echo 'No secrets detected in this PR.'
+              echo 'No secrets detected. All clear!'
               echo 'EOF'
             } >> "$GITHUB_OUTPUT"
           else
@@ -154,7 +154,7 @@ jobs:
           fi
 
       - name: Post PR comment
-        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total != '0' }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
         uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2.8.2
         with:
           # We retain the final trufflehog-secret-scan-comment marker in case we want to chang the action to another one.
