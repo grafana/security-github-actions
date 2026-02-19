@@ -62,6 +62,8 @@ jobs:
           # Lock files and checksums (contain hashes, not secrets)
           path:go\.sum$
           path:go\.mod$
+          # Dependency manifests (contain URLs that trigger false positives)
+          path:package\.json$
           path:package-lock\.json$
           path:pnpm-lock\.yaml$
           path:yarn\.lock$
@@ -70,6 +72,8 @@ jobs:
           path:uv\.lock$
           path:Cargo\.lock$
           path:Gemfile\.lock$
+          # Grafana plugin metadata
+          path:grafana\.json$
           EOF
 
           echo "Created global exclusion patterns:"
@@ -94,6 +98,7 @@ jobs:
                 # Skip excluded files (explicit string matching - guaranteed to work)
                 if [[ "$filename" == "go.sum" ]] || \
                    [[ "$filename" == "go.mod" ]] || \
+                   [[ "$filename" == "package.json" ]] || \
                    [[ "$filename" == "package-lock.json" ]] || \
                    [[ "$filename" == "pnpm-lock.yaml" ]] || \
                    [[ "$filename" == "yarn.lock" ]] || \
@@ -101,8 +106,9 @@ jobs:
                    [[ "$filename" == "Pipfile.lock" ]] || \
                    [[ "$filename" == "uv.lock" ]] || \
                    [[ "$filename" == "Cargo.lock" ]] || \
-                   [[ "$filename" == "Gemfile.lock" ]]; then
-                  echo "Skipping: ${file} (excluded lock/checksum file)"
+                   [[ "$filename" == "Gemfile.lock" ]] || \
+                   [[ "$filename" == "grafana.json" ]]; then
+                  echo "Skipping: ${file} (excluded manifest/lock file)"
                   continue
                 fi
 
