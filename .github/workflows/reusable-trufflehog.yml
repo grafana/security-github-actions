@@ -55,6 +55,26 @@ jobs:
           sudo chmod +x /usr/local/bin/trufflehog
           trufflehog --version
 
+      - name: Create global exclusions
+        run: |
+          # Create centralized exclusion patterns for common false positives
+          cat > /tmp/trufflehog-exclude.txt <<'EOF'
+          # Lock files and checksums (contain hashes, not secrets)
+          path:go\.sum$
+          path:go\.mod$
+          path:package-lock\.json$
+          path:pnpm-lock\.yaml$
+          path:yarn\.lock$
+          path:poetry\.lock$
+          path:Pipfile\.lock$
+          path:uv\.lock$
+          path:Cargo\.lock$
+          path:Gemfile\.lock$
+          EOF
+
+          echo "Created global exclusion patterns:"
+          cat /tmp/trufflehog-exclude.txt
+
       - name: Scan for secrets
         id: scan
         run: |
@@ -70,7 +90,7 @@ jobs:
               while IFS= read -r file; do
                 if [[ -f "${file}" ]]; then
                   echo "Scanning: ${file}"
-                  trufflehog filesystem "${file}" --json --no-update --results=verified,unverified >> results.ndjson || true
+                  trufflehog filesystem "${file}" --exclude-paths /tmp/trufflehog-exclude.txt --json --no-update --results=verified,unverified >> results.ndjson || true
                 fi
               done < changed-files.txt
             else
@@ -79,7 +99,7 @@ jobs:
           else
             # Push to main: Scan current filesystem
             echo "Scanning current filesystem..."
-            trufflehog filesystem . --json --no-update --results=verified,unverified > results.ndjson || true
+            trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --json --no-update --results=verified,unverified > results.ndjson || true
           fi
 
           # Process results
