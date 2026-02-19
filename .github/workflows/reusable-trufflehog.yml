@@ -95,22 +95,13 @@ jobs:
                 # Get just the filename
                 filename=$(basename "$file")
 
-                # Skip excluded files (explicit string matching - guaranteed to work)
-                if [[ "$filename" == "go.sum" ]] || \
-                   [[ "$filename" == "go.mod" ]] || \
-                   [[ "$filename" == "package.json" ]] || \
-                   [[ "$filename" == "package-lock.json" ]] || \
-                   [[ "$filename" == "pnpm-lock.yaml" ]] || \
-                   [[ "$filename" == "yarn.lock" ]] || \
-                   [[ "$filename" == "poetry.lock" ]] || \
-                   [[ "$filename" == "Pipfile.lock" ]] || \
-                   [[ "$filename" == "uv.lock" ]] || \
-                   [[ "$filename" == "Cargo.lock" ]] || \
-                   [[ "$filename" == "Gemfile.lock" ]] || \
-                   [[ "$filename" == "grafana.json" ]]; then
-                  echo "Skipping: ${file} (excluded manifest/lock file)"
-                  continue
-                fi
+                # Skip excluded files (use case statement for cleaner matching)
+                case "$filename" in
+                  go.sum|go.mod|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|poetry.lock|Pipfile.lock|uv.lock|Cargo.lock|Gemfile.lock|grafana.json)
+                    echo "Skipping: ${file} (excluded manifest/lock file)"
+                    continue
+                    ;;
+                esac
 
                 if [[ -f "${file}" ]]; then
                   echo "Scanning: ${file}"
