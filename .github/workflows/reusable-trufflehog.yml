@@ -88,6 +88,24 @@ jobs:
 
             if [[ -s changed-files.txt ]]; then
               while IFS= read -r file; do
+                # Get just the filename
+                filename=$(basename "$file")
+
+                # Skip excluded files (explicit string matching - guaranteed to work)
+                if [[ "$filename" == "go.sum" ]] || \
+                   [[ "$filename" == "go.mod" ]] || \
+                   [[ "$filename" == "package-lock.json" ]] || \
+                   [[ "$filename" == "pnpm-lock.yaml" ]] || \
+                   [[ "$filename" == "yarn.lock" ]] || \
+                   [[ "$filename" == "poetry.lock" ]] || \
+                   [[ "$filename" == "Pipfile.lock" ]] || \
+                   [[ "$filename" == "uv.lock" ]] || \
+                   [[ "$filename" == "Cargo.lock" ]] || \
+                   [[ "$filename" == "Gemfile.lock" ]]; then
+                  echo "Skipping: ${file} (excluded lock/checksum file)"
+                  continue
+                fi
+
                 if [[ -f "${file}" ]]; then
                   echo "Scanning: ${file}"
                   trufflehog filesystem "${file}" --exclude-paths /tmp/trufflehog-exclude.txt --json --no-update --results=verified,unverified >> results.ndjson || true
