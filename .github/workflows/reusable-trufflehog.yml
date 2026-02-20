@@ -105,7 +105,7 @@ jobs:
 
                 if [[ -f "${file}" ]]; then
                   echo "Scanning: ${file}"
-                  trufflehog filesystem "${file}" --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 8 --json --no-update --results=verified,unverified >> results.ndjson || true
+                  trufflehog filesystem "${file}" --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified >> results.ndjson || true
                 fi
               done < changed-files.txt
             else
@@ -114,7 +114,7 @@ jobs:
           else
             # Push to main: Scan current filesystem
             echo "Scanning current filesystem..."
-            trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 8 --json --no-update --results=verified,unverified > results.ndjson || true
+            trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
           fi
 
           # Process results
