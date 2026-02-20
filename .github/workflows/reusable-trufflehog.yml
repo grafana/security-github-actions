@@ -81,7 +81,7 @@ jobs:
 
       - name: Scan for secrets
         id: scan
-        environment:
+        env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           SHA: ${{ github.sha }}
         run: |
