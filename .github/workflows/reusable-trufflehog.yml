@@ -117,9 +117,15 @@ jobs:
             trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
           fi
 
-          # Process results
+          # Process results and filter git hashes from CHANGELOG files
           if [[ -s results.ndjson ]]; then
-            grep -v '^$' results.ndjson | jq -s '.' > results.json 2>/dev/null || echo "[]" > results.json
+            grep -v '^$' results.ndjson | jq -c 'select(
+              not(
+                ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
+                ($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and
+                (.Raw | test("^[0-9a-f]{7,40}$"; "i"))
+              )
+            )' | jq -s '.' > results.json 2>/dev/null || echo "[]" > results.json
           fi
 
           # Count secrets
