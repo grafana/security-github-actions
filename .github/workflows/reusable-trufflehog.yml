@@ -74,6 +74,12 @@ jobs:
           path:Gemfile\.lock$
           # Grafana plugin metadata
           path:grafana\.json$
+          # Changelog files (contain commit hashes, PR URLs)
+          path:CHANGELOG\.md$
+          path:CHANGELOG$
+          path:CHANGELOG\.txt$
+          path:HISTORY\.md$
+          path:NEWS\.md$
           EOF
 
           echo "Created global exclusion patterns:"
@@ -97,8 +103,8 @@ jobs:
 
                 # Skip excluded files (use case statement for cleaner matching)
                 case "$filename" in
-                  go.sum|go.mod|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|poetry.lock|Pipfile.lock|uv.lock|Cargo.lock|Gemfile.lock|grafana.json)
-                    echo "Skipping: ${file} (excluded manifest/lock file)"
+                  go.sum|go.mod|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|poetry.lock|Pipfile.lock|uv.lock|Cargo.lock|Gemfile.lock|grafana.json|CHANGELOG.md|CHANGELOG|CHANGELOG.txt|HISTORY.md|NEWS.md)
+                    echo "Skipping: ${file} (excluded manifest/lock/changelog file)"
                     continue
                     ;;
                 esac
