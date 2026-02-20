@@ -88,7 +88,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             # PR: Scan only changed files (using three-dot diff to show only PR changes)
             echo "Scanning changed files in PR..."
-            git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.sha }} > changed-files.txt
+            git diff --name-only origin/${{ github.event.pull_request.base.ref }}...${{ github.sha }} > changed-files.txt
 
             if [[ -s changed-files.txt ]]; then
               while IFS= read -r file; do
