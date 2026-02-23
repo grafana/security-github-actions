@@ -47,13 +47,13 @@ jobs:
           if [ $EXIT_CODE -gt 1 ]; then
             echo "::error::Semgrep run encounters an error"
             cat /tmp/semgrep-results.json
+            exit 1
           fi
 
           HIGH_CRITICAL=$(jq '[.results[] | select(.extra.severity == "HIGH" or .extra.severity == "CRITICAL")] | length' /tmp/semgrep-results.json)
           if [ "$HIGH_CRITICAL" -gt 0 ]; then
             echo "has_high_critical=true" >> "$GITHUB_OUTPUT"
           fi
-        continue-on-error: true
 
       - if: steps.semgrep.outputs.has_findings == 'true'
         uses: int128/comment-action@66317511bc86c47bd51e03059040e8a460a167b8
