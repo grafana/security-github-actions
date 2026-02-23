@@ -1,8 +1,8 @@
 rules:
   - id: deny-actions-create-github-app-token
-    pattderns:
+    patterns:
       - pattern-regex: "uses:\\s*actions/create-github-app-token"
-    passths:
+    paths:
       include:
         - "*.yaml"
         - "*.yml"
