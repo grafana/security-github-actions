@@ -123,23 +123,44 @@ jobs:
           # Process results and filter git hashes from CHANGELOG files
           if [[ -s results.ndjson ]]; then
             echo "Processing results.ndjson..."
-            # First, try to process with filtering
-            if ! grep -v '^$' results.ndjson | jq -c 'select(
-              !(
-                ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
-                ($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and
-                (.Raw | test("^[0-9a-f]{7,40}$"; "i"))
-              )
-            )' | jq -s '.' > results.json 2>&1; then
-              echo "Warning: jq filtering failed, using raw results"
-              # If filtering fails, use raw results without filtering
-              grep -v '^$' results.ndjson | jq -s '.' > results.json 2>&1 || {
-                echo "Error: Failed to process results.ndjson"
-                echo "Raw file content (first 10 lines):"
-                head -10 results.ndjson || echo "File is empty or doesn't exist"
+            echo "File size: $(wc -l < results.ndjson) lines"
+            
+            # Filter out non-JSON lines (like log messages) - only keep lines that start with {
+            # Then convert NDJSON to JSON array
+            TEMP_FILTERED=$(mktemp)
+            grep -v '^$' results.ndjson | grep '^{' > "${TEMP_FILTERED}" || true
+            
+            if [[ -s "${TEMP_FILTERED}" ]]; then
+              JSON_COUNT=$(wc -l < "${TEMP_FILTERED}")
+              echo "Found ${JSON_COUNT} JSON objects to process"
+              
+              # First, convert to JSON array (simple, no filtering)
+              if jq -R 'fromjson?' "${TEMP_FILTERED}" 2>/dev/null | jq -s '.' > results.json 2>&1; then
+                echo "Successfully converted to JSON array"
+                
+                # Now filter out CHANGELOG git hashes if we have results
+                if jq -e 'length > 0' results.json >/dev/null 2>&1; then
+                  echo "Filtering out CHANGELOG git hashes..."
+                  jq '[.[] | select(
+                    ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
+                    !(($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and (.Raw | test("^[0-9a-f]{7,40}$"; "i")))
+                  )]' results.json > results.json.tmp && mv results.json.tmp results.json
+                  echo "Filtering complete"
+                fi
+              else
+                echo "Error: Failed to parse JSON objects"
+                echo "Sample of filtered content (first 3 lines):"
+                head -3 "${TEMP_FILTERED}" || echo "No content"
                 echo "[]" > results.json
-              }
+              fi
+            else
+              echo "Warning: No valid JSON objects found in results.ndjson"
+              echo "Sample content (first 5 lines):"
+              head -5 results.ndjson || echo "File is empty"
+              echo "[]" > results.json
             fi
+            
+            rm -f "${TEMP_FILTERED}"
           else
             echo "No results.ndjson file or it's empty"
             echo "[]" > results.json
