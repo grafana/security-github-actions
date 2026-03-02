@@ -18,7 +18,7 @@ permissions:
 jobs:
   secret-scan:
     name: TruffleHog Secret Scan
-    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@main
+    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@fix/trufflehog-json-processing-and-fail-on-verified
     with:
       # Fail on verified secrets - blocking mode
       fail-on-verified: "true"      # Block on verified secrets
