@@ -122,20 +122,37 @@ jobs:
 
           # Process results and filter git hashes from CHANGELOG files
           if [[ -s results.ndjson ]]; then
-            grep -v '^$' results.ndjson | jq -c 'select(
+            echo "Processing results.ndjson..."
+            # First, try to process with filtering
+            if ! grep -v '^$' results.ndjson | jq -c 'select(
               !(
                 ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
                 ($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and
                 (.Raw | test("^[0-9a-f]{7,40}$"; "i"))
               )
-            )' | jq -s '.' > results.json 2>/dev/null || echo "[]" > results.json
+            )' | jq -s '.' > results.json 2>&1; then
+              echo "Warning: jq filtering failed, using raw results"
+              # If filtering fails, use raw results without filtering
+              grep -v '^$' results.ndjson | jq -s '.' > results.json 2>&1 || {
+                echo "Error: Failed to process results.ndjson"
+                echo "Raw file content (first 10 lines):"
+                head -10 results.ndjson || echo "File is empty or doesn't exist"
+                echo "[]" > results.json
+              }
+            fi
+          else
+            echo "No results.ndjson file or it's empty"
+            echo "[]" > results.json
           fi
 
           # Count secrets
+          echo "Counting secrets from results.json..."
           if jq empty results.json 2>/dev/null; then
             VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' results.json 2>/dev/null || echo "0")
             UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' results.json 2>/dev/null || echo "0")
+            echo "Results.json contains $(jq 'length' results.json 2>/dev/null || echo "0") items"
           else
+            echo "Error: results.json is not valid JSON"
             VERIFIED=0
             UNVERIFIED=0
             echo "[]" > results.json
@@ -143,10 +160,14 @@ jobs:
 
           TOTAL=$((VERIFIED+UNVERIFIED))
           echo "Found ${TOTAL} potential secrets (${VERIFIED} verified, ${UNVERIFIED} unverified)"
+          echo "DEBUG: Setting outputs - verified=${VERIFIED}, unverified=${UNVERIFIED}, total=${TOTAL}"
 
           echo "verified=${VERIFIED}" >> "${GITHUB_OUTPUT}"
           echo "unverified=${UNVERIFIED}" >> "${GITHUB_OUTPUT}"
           echo "total=${TOTAL}" >> "${GITHUB_OUTPUT}"
+          
+          # Verify outputs were set
+          echo "DEBUG: Outputs set - verified=$(cat ${GITHUB_OUTPUT} | grep '^verified=' | cut -d'=' -f2), unverified=$(cat ${GITHUB_OUTPUT} | grep '^unverified=' | cut -d'=' -f2), total=$(cat ${GITHUB_OUTPUT} | grep '^total=' | cut -d'=' -f2)"
 
       - name: Delete resolved comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total == '0' }}
