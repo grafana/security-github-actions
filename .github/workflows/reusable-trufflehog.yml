@@ -123,7 +123,7 @@ jobs:
           # Process results and filter git hashes from CHANGELOG files
           if [[ -s results.ndjson ]]; then
             grep -v '^$' results.ndjson | jq -c 'select(
-              not(
+              !(
                 ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
                 ($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and
                 (.Raw | test("^[0-9a-f]{7,40}$"; "i"))
