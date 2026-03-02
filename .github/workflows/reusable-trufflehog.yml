@@ -122,13 +122,30 @@ jobs:
 
           # Process results and filter git hashes from CHANGELOG files
           if [[ -s results.ndjson ]]; then
-            grep -v '^$' results.ndjson | jq -c 'select(
-              not(
-                ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
-                ($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and
-                (.Raw | test("^[0-9a-f]{7,40}$"; "i"))
-              )
-            )' | jq -s '.' > results.json 2>/dev/null || echo "[]" > results.json
+            # Filter out non-JSON lines (like log messages) - only keep lines that start with {
+            TEMP_FILTERED=$(mktemp)
+            grep -v '^$' results.ndjson | grep '^{' > "${TEMP_FILTERED}" || true
+            
+            if [[ -s "${TEMP_FILTERED}" ]]; then
+              # Convert NDJSON to JSON array
+              if jq -R 'fromjson?' "${TEMP_FILTERED}" 2>/dev/null | jq -s '.' > results.json 2>&1; then
+                # Filter out CHANGELOG git hashes if we have results
+                if jq -e 'length > 0' results.json >/dev/null 2>&1; then
+                  jq '[.[] | select(
+                    ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
+                    !(($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and (.Raw | test("^[0-9a-f]{7,40}$"; "i")))
+                  )]' results.json > results.json.tmp && mv results.json.tmp results.json
+                fi
+              else
+                echo "[]" > results.json
+              fi
+            else
+              echo "[]" > results.json
+            fi
+            
+            rm -f "${TEMP_FILTERED}"
+          else
+            echo "[]" > results.json
           fi
 
           # Count secrets
@@ -214,7 +231,7 @@ jobs:
           fi
 
       - name: Post PR comment
-        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total > 0 }}
+        if: ${{ always() && !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.comment-body.outcome == 'success' && steps.scan.outputs.total > 0 }}
         uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2.8.2
         with:
           # We retain the final trufflehog-secret-scan-comment marker in case we want to chang the action to another one.
@@ -267,16 +284,14 @@ jobs:
           UNVERIFIED_COUNT: ${{ steps.scan.outputs.unverified }}
         run: |
           SHOULD_FAIL=false
-          if [[ "${FAIL_ON_VERIFIED}" == "true" && "${VERIFIED_COUNT}" != "0" ]]; then
+          if [[ "${FAIL_ON_VERIFIED}" == "true" && "${VERIFIED_COUNT}" != "0" && -n "${VERIFIED_COUNT}" ]]; then
             SHOULD_FAIL=true
           fi
-          if [[ "${FAIL_ON_UNVERIFIED}" == "true" && "${UNVERIFIED_COUNT}" != "0" ]]; then
+          if [[ "${FAIL_ON_UNVERIFIED}" == "true" && "${UNVERIFIED_COUNT}" != "0" && -n "${UNVERIFIED_COUNT}" ]]; then
             SHOULD_FAIL=true
           fi
 
           if [[ "${SHOULD_FAIL}" == "true" ]]; then
             echo "Workflow failed due to secrets found (verified: ${VERIFIED_COUNT}, unverified: ${UNVERIFIED_COUNT})"
             exit 1
-          else
-            echo "No action needed - secrets within configured thresholds"
           fi
