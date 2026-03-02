@@ -266,17 +266,25 @@ jobs:
           VERIFIED_COUNT: ${{ steps.scan.outputs.verified }}
           UNVERIFIED_COUNT: ${{ steps.scan.outputs.unverified }}
         run: |
+          echo "=== Failure Policy Check ==="
+          echo "FAIL_ON_VERIFIED: '${FAIL_ON_VERIFIED}'"
+          echo "FAIL_ON_UNVERIFIED: '${FAIL_ON_UNVERIFIED}'"
+          echo "VERIFIED_COUNT: '${VERIFIED_COUNT}'"
+          echo "UNVERIFIED_COUNT: '${UNVERIFIED_COUNT}'"
+          
           SHOULD_FAIL=false
-          if [[ "${FAIL_ON_VERIFIED}" == "true" && "${VERIFIED_COUNT}" != "0" ]]; then
+          if [[ "${FAIL_ON_VERIFIED}" == "true" && "${VERIFIED_COUNT}" != "0" && -n "${VERIFIED_COUNT}" ]]; then
+            echo "Triggering failure: verified secrets found (count: ${VERIFIED_COUNT})"
             SHOULD_FAIL=true
           fi
-          if [[ "${FAIL_ON_UNVERIFIED}" == "true" && "${UNVERIFIED_COUNT}" != "0" ]]; then
+          if [[ "${FAIL_ON_UNVERIFIED}" == "true" && "${UNVERIFIED_COUNT}" != "0" && -n "${UNVERIFIED_COUNT}" ]]; then
+            echo "Triggering failure: unverified secrets found (count: ${UNVERIFIED_COUNT})"
             SHOULD_FAIL=true
           fi
 
           if [[ "${SHOULD_FAIL}" == "true" ]]; then
-            echo "Workflow failed due to secrets found (verified: ${VERIFIED_COUNT}, unverified: ${UNVERIFIED_COUNT})"
+            echo "❌ Workflow failed due to secrets found (verified: ${VERIFIED_COUNT}, unverified: ${UNVERIFIED_COUNT})"
             exit 1
           else
-            echo "No action needed - secrets within configured thresholds"
+            echo "✅ No action needed - secrets within configured thresholds"
           fi
