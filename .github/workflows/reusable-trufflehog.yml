@@ -122,58 +122,37 @@ jobs:
 
           # Process results and filter git hashes from CHANGELOG files
           if [[ -s results.ndjson ]]; then
-            echo "Processing results.ndjson..."
-            echo "File size: $(wc -l < results.ndjson) lines"
-            
             # Filter out non-JSON lines (like log messages) - only keep lines that start with {
-            # Then convert NDJSON to JSON array
             TEMP_FILTERED=$(mktemp)
             grep -v '^$' results.ndjson | grep '^{' > "${TEMP_FILTERED}" || true
             
             if [[ -s "${TEMP_FILTERED}" ]]; then
-              JSON_COUNT=$(wc -l < "${TEMP_FILTERED}")
-              echo "Found ${JSON_COUNT} JSON objects to process"
-              
-              # First, convert to JSON array (simple, no filtering)
+              # Convert NDJSON to JSON array
               if jq -R 'fromjson?' "${TEMP_FILTERED}" 2>/dev/null | jq -s '.' > results.json 2>&1; then
-                echo "Successfully converted to JSON array"
-                
-                # Now filter out CHANGELOG git hashes if we have results
+                # Filter out CHANGELOG git hashes if we have results
                 if jq -e 'length > 0' results.json >/dev/null 2>&1; then
-                  echo "Filtering out CHANGELOG git hashes..."
                   jq '[.[] | select(
                     ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
                     !(($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and (.Raw | test("^[0-9a-f]{7,40}$"; "i")))
                   )]' results.json > results.json.tmp && mv results.json.tmp results.json
-                  echo "Filtering complete"
                 fi
               else
-                echo "Error: Failed to parse JSON objects"
-                echo "Sample of filtered content (first 3 lines):"
-                head -3 "${TEMP_FILTERED}" || echo "No content"
                 echo "[]" > results.json
               fi
             else
-              echo "Warning: No valid JSON objects found in results.ndjson"
-              echo "Sample content (first 5 lines):"
-              head -5 results.ndjson || echo "File is empty"
               echo "[]" > results.json
             fi
             
             rm -f "${TEMP_FILTERED}"
           else
-            echo "No results.ndjson file or it's empty"
             echo "[]" > results.json
           fi
 
           # Count secrets
-          echo "Counting secrets from results.json..."
           if jq empty results.json 2>/dev/null; then
             VERIFIED=$(jq '[.[] | select(.Verified==true)] | length' results.json 2>/dev/null || echo "0")
             UNVERIFIED=$(jq '[.[] | select(.Verified==false)] | length' results.json 2>/dev/null || echo "0")
-            echo "Results.json contains $(jq 'length' results.json 2>/dev/null || echo "0") items"
           else
-            echo "Error: results.json is not valid JSON"
             VERIFIED=0
             UNVERIFIED=0
             echo "[]" > results.json
@@ -181,14 +160,10 @@ jobs:
 
           TOTAL=$((VERIFIED+UNVERIFIED))
           echo "Found ${TOTAL} potential secrets (${VERIFIED} verified, ${UNVERIFIED} unverified)"
-          echo "DEBUG: Setting outputs - verified=${VERIFIED}, unverified=${UNVERIFIED}, total=${TOTAL}"
 
           echo "verified=${VERIFIED}" >> "${GITHUB_OUTPUT}"
           echo "unverified=${UNVERIFIED}" >> "${GITHUB_OUTPUT}"
           echo "total=${TOTAL}" >> "${GITHUB_OUTPUT}"
-          
-          # Verify outputs were set
-          echo "DEBUG: Outputs set - verified=$(cat ${GITHUB_OUTPUT} | grep '^verified=' | cut -d'=' -f2), unverified=$(cat ${GITHUB_OUTPUT} | grep '^unverified=' | cut -d'=' -f2), total=$(cat ${GITHUB_OUTPUT} | grep '^total=' | cut -d'=' -f2)"
 
       - name: Delete resolved comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total == '0' }}
@@ -308,25 +283,15 @@ jobs:
           VERIFIED_COUNT: ${{ steps.scan.outputs.verified }}
           UNVERIFIED_COUNT: ${{ steps.scan.outputs.unverified }}
         run: |
-          echo "=== Failure Policy Check ==="
-          echo "FAIL_ON_VERIFIED: '${FAIL_ON_VERIFIED}'"
-          echo "FAIL_ON_UNVERIFIED: '${FAIL_ON_UNVERIFIED}'"
-          echo "VERIFIED_COUNT: '${VERIFIED_COUNT}'"
-          echo "UNVERIFIED_COUNT: '${UNVERIFIED_COUNT}'"
-          
           SHOULD_FAIL=false
           if [[ "${FAIL_ON_VERIFIED}" == "true" && "${VERIFIED_COUNT}" != "0" && -n "${VERIFIED_COUNT}" ]]; then
-            echo "Triggering failure: verified secrets found (count: ${VERIFIED_COUNT})"
             SHOULD_FAIL=true
           fi
           if [[ "${FAIL_ON_UNVERIFIED}" == "true" && "${UNVERIFIED_COUNT}" != "0" && -n "${UNVERIFIED_COUNT}" ]]; then
-            echo "Triggering failure: unverified secrets found (count: ${UNVERIFIED_COUNT})"
             SHOULD_FAIL=true
           fi
 
           if [[ "${SHOULD_FAIL}" == "true" ]]; then
-            echo "❌ Workflow failed due to secrets found (verified: ${VERIFIED_COUNT}, unverified: ${UNVERIFIED_COUNT})"
+            echo "Workflow failed due to secrets found (verified: ${VERIFIED_COUNT}, unverified: ${UNVERIFIED_COUNT})"
             exit 1
-          else
-            echo "✅ No action needed - secrets within configured thresholds"
           fi
