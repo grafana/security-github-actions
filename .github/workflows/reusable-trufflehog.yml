@@ -35,8 +35,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
-          fetch-depth: 0
-          persist-credentials: false
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Fetch base commit
+        if: github.event_name == 'pull_request'
+        run: git fetch --depth=1 origin ${{ github.event.pull_request.base.sha }}
 
       - name: Install TruffleHog
         run: |
@@ -81,17 +85,14 @@ jobs:
 
       - name: Scan for secrets
         id: scan
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          SHA: ${{ github.sha }}
         run: |
           set +e
           echo "[]" > results.json
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # PR: Scan only changed files (using three-dot diff to show only PR changes)
+            # PR: Scan only changed files (using two-dot diff with explicit base SHA)
             echo "Scanning changed files in PR..."
-            git diff --name-only origin/${BASE_REF}...${SHA} > changed-files.txt
+            git diff --name-only FETCH_HEAD..HEAD > changed-files.txt
 
             if [[ -s changed-files.txt ]]; then
               while IFS= read -r file; do
