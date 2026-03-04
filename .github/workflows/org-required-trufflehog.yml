@@ -20,7 +20,7 @@ permissions:
 jobs:
   secret-scan:
     name: TruffleHog Secret Scan
-    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@fix-pr-changed-files-diff
+    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@main
     with:
       # Fail on verified secrets - blocking mode
       fail-on-verified: "false"      # Block on verified secrets
