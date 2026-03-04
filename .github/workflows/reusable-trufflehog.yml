@@ -38,9 +38,9 @@ jobs:
           fetch-depth: 1
           persist-credentials: true
 
-      - name: Fetch base commit
+      - name: Fetch base and head commits
         if: github.event_name == 'pull_request'
-        run: git fetch --depth=1 origin ${{ github.event.pull_request.base.sha }}
+        run: git fetch --depth=1 origin ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
 
       - name: Remove persisted credentials
         run: git config --unset-all http.https://github.com/.extraheader
@@ -95,7 +95,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             # PR: Scan only changed files (using two-dot diff with explicit base SHA)
             echo "Scanning changed files in PR..."
-            git diff --name-only FETCH_HEAD..HEAD > changed-files.txt
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed-files.txt
 
             if [[ -s changed-files.txt ]]; then
               while IFS= read -r file; do
