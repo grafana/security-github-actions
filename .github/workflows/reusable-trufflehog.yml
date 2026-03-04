@@ -35,12 +35,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: true
-
-      - name: Fetch base and head commits
-        if: github.event_name == 'pull_request'
-        run: git fetch --depth=1 origin ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
 
       - name: Remove persisted credentials
         run: git config --unset-all http.https://github.com/.extraheader
@@ -92,32 +88,26 @@ jobs:
           set +e
           echo "[]" > results.json
 
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # PR: Scan only changed files (using two-dot diff with explicit base SHA)
-            echo "Scanning changed files in PR..."
-            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed-files.txt
-
-            if [[ -s changed-files.txt ]]; then
-              while IFS= read -r file; do
-                # Get just the filename
-                filename=$(basename "$file")
-
-                # Skip excluded files (use case statement for cleaner matching)
-                case "$filename" in
-                  go.sum|go.mod|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|poetry.lock|Pipfile.lock|uv.lock|Cargo.lock|Gemfile.lock|grafana.json)
-                    echo "Skipping: ${file} (excluded manifest/lock file)"
-                    continue
-                    ;;
-                esac
-
-                if [[ -f "${file}" ]]; then
-                  echo "Scanning: ${file}"
-                  trufflehog filesystem "${file}" --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified >> results.ndjson || true
-                fi
-              done < changed-files.txt
-            else
-              echo "No files changed"
-            fi
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            echo "Scanning PR commits..."
+            trufflehog git file://. \
+              --since-commit="${PR_BASE_SHA}" \
+              --branch="${PR_HEAD_SHA}" \
+              --no-update \
+              --json \
+              --results=verified,unverified \
+              --exclude-paths /tmp/trufflehog-exclude.txt \
+              > results.ndjson || true
+          elif [[ "${EVENT_NAME}" == "merge_group" ]]; then
+            echo "Scanning merge group commits..."
+            trufflehog git file://. \
+              --since-commit="${MG_BASE_SHA}" \
+              --branch="${MG_HEAD_SHA}" \
+              --no-update \
+              --json \
+              --results=verified,unverified \
+              --exclude-paths /tmp/trufflehog-exclude.txt \
+              > results.ndjson || true
           else
             # Push to main: Scan current filesystem
             echo "Scanning current filesystem..."
