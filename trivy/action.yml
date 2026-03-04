@@ -29,7 +29,7 @@ runs:
         scanners: vuln
         timeout: 30s
         ignore-unfixed: true	
-        version: v0.58.0
+        version: v0.69.2
         hide-progress: true
         output: base_trivy_report.json
         format: json
