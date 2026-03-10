@@ -27,4 +27,6 @@ jobs:
       fail-on-verified: "false"      # Block on verified secrets
       fail-on-unverified: "false"    # Don't block on unverified secrets
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # Use same runner pattern as zizmor
+      # Build and run Bench from grafana-bench branch (TruffleHog parser not in released image yet)
+      bench-ref: "trufflehog-poc"
     secrets: inherit

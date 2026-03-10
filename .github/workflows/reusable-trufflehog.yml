@@ -28,6 +28,22 @@ on:
         type: boolean
         default: true
 
+      bench-image:
+        description: |
+          Full Docker image (including tag) for Grafana Bench report step.
+          Use an image that includes TruffleHog report support (e.g. v1.0.2+ or dev-latest from main).
+        required: false
+        default: "us-docker.pkg.dev/grafanalabs-global/docker-grafana-bench-prod/grafana-bench:v1.0.1"
+        type: string
+
+      bench-ref:
+        description: |
+          Git ref (branch or tag) of grafana/grafana-bench to build and run instead of using bench-image.
+          Use this to run the TruffleHog parser from a branch (e.g. trufflehog-poc) before it is released.
+        required: false
+        default: ""
+        type: string
+
 permissions:
   contents: read
   pull-requests: write
@@ -318,7 +334,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
 
@@ -333,7 +349,26 @@ jobs:
         with:
           name: trufflehog_scan
 
+      - name: Checkout grafana-bench at ref
+        if: inputs.bench-ref != ''
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          repository: grafana/grafana-bench
+          ref: ${{ inputs.bench-ref }}
+          path: bench-src
+
+      - name: Set up Go
+        if: inputs.bench-ref != ''
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: bench-src/go.mod
+
+      - name: Build grafana-bench
+        if: inputs.bench-ref != ''
+        run: cd bench-src && go build -o grafana-bench .
+
       - name: Run Grafana Bench (Docker image)
+        if: inputs.bench-ref == ''
         env:
           PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
           PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
@@ -344,7 +379,7 @@ jobs:
             echo "::error::No results.json found; scan job must upload the trufflehog_scan artifact."
             exit 1
           fi
-          if ! docker pull us-docker.pkg.dev/grafanalabs-global/docker-grafana-bench-prod/grafana-bench:v1.0.1; then
+          if ! docker pull ${{ inputs.bench-image }}; then
             echo "Could not pull Bench image; skipping bench step."
             exit 0
           fi
@@ -355,7 +390,7 @@ jobs:
             -e PROMETHEUS_URL="${PROMETHEUS_URL}" \
             -e PROMETHEUS_USER="${PROMETHEUS_USER}" \
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
-            us-docker.pkg.dev/grafanalabs-global/docker-grafana-bench-prod/grafana-bench:v1.0.1 report \
+            ${{ inputs.bench-image }} report \
             --report-input trufflehog \
             --service ${{ format('grafana-{0}', github.repository) }} \
             --service-version ${{ github.sha }} \
@@ -365,3 +400,27 @@ jobs:
             --log-level info \
             ${PROM_FLAG} \
             "/tests/${JSON_FILE#./}"
+
+      - name: Run Grafana Bench (from ref)
+        if: inputs.bench-ref != ''
+        env:
+          PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+          PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
+          PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
+        run: |
+          JSON_FILE=$(find . -name "results.json" -type f | head -n 1)
+          if [ -z "${JSON_FILE}" ]; then
+            echo "::error::No results.json found; scan job must upload the trufflehog_scan artifact."
+            exit 1
+          fi
+          PROM_FLAG=""; [ -n "${PROMETHEUS_URL}" ] && PROM_FLAG="--prometheus-metrics"
+          ./bench-src/grafana-bench report \
+            --report-input trufflehog \
+            --service ${{ format('grafana-{0}', github.repository) }} \
+            --service-version ${{ github.sha }} \
+            --suite-name ${{ github.repository }}/trufflehog \
+            --run-stage ci \
+            --report-output log \
+            --log-level info \
+            ${PROM_FLAG} \
+            "${JSON_FILE}"
