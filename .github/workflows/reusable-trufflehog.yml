@@ -373,6 +373,7 @@ jobs:
           PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
           PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
           PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
+          SUITE_NAME: ${{ github.repository }}
         run: |
           JSON_FILE=$(find . -name "results.json" -not -path "./bench-src/*" -type f | head -n 1)
           if [ -z "${JSON_FILE}" ]; then
@@ -387,7 +388,7 @@ jobs:
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
             grafana-bench:bench-ref report \
             --report-input trufflehog \
-            --suite-name ${{ github.repository }} \
+            --suite-name "${SUITE_NAME}" \
             --run-stage ci \
             --report-output log \
             --log-level info \
@@ -400,13 +401,15 @@ jobs:
           PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
           PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
           PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
+          BENCH_IMAGE: ${{ inputs.bench-image }}
+          SUITE_NAME: ${{ github.repository }}
         run: |
           JSON_FILE=$(find . -name "results.json" -type f | head -n 1)
           if [ -z "${JSON_FILE}" ]; then
             echo "::error::No results.json found; scan job must upload the trufflehog_scan artifact."
             exit 1
           fi
-          if ! docker pull ${{ inputs.bench-image }}; then
+          if ! docker pull "${BENCH_IMAGE}"; then
             echo "Could not pull Bench image; skipping bench step."
             exit 0
           fi
@@ -417,9 +420,9 @@ jobs:
             -e PROMETHEUS_URL="${PROMETHEUS_URL}" \
             -e PROMETHEUS_USER="${PROMETHEUS_USER}" \
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
-            ${{ inputs.bench-image }} report \
+            "${BENCH_IMAGE}" report \
             --report-input trufflehog \
-            --suite-name ${{ github.repository }} \
+            --suite-name "${SUITE_NAME}" \
             --run-stage ci \
             --report-output log \
             --log-level info \
