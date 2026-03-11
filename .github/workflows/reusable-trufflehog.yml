@@ -339,6 +339,7 @@ jobs:
           persist-credentials: false
 
       - name: Login to GAR (for Bench image)
+        if: inputs.bench-ref == ''
         uses: grafana/shared-workflows/actions/login-to-gar@login-to-gar/v1.0.1
         continue-on-error: true
         with:
@@ -357,17 +358,43 @@ jobs:
           ref: ${{ inputs.bench-ref }}
           path: bench-src
 
-      - name: Set up Go
+      - name: Build grafana-bench Docker image from ref
         if: inputs.bench-ref != ''
-        uses: actions/setup-go@v5
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
-          go-version-file: bench-src/go.mod
+          context: bench-src
+          file: bench-src/Dockerfile
+          load: true
+          tags: grafana-bench:bench-ref
 
-      - name: Build grafana-bench
+      - name: Run Grafana Bench (Docker image from ref)
         if: inputs.bench-ref != ''
-        run: cd bench-src && go build -o grafana-bench .
+        env:
+          PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+          PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
+          PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
+        run: |
+          JSON_FILE=$(find . -name "results.json" -not -path "./bench-src/*" -type f | head -n 1)
+          if [ -z "${JSON_FILE}" ]; then
+            echo "::error::No results.json found; scan job must upload the trufflehog_scan artifact."
+            exit 1
+          fi
+          PROM_FLAG=""; [ -n "${PROMETHEUS_URL}" ] && PROM_FLAG="--prometheus-metrics"
+          docker run --rm \
+            --volume="${PWD}:/tests/" \
+            -e PROMETHEUS_URL="${PROMETHEUS_URL}" \
+            -e PROMETHEUS_USER="${PROMETHEUS_USER}" \
+            -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
+            grafana-bench:bench-ref report \
+            --report-input trufflehog \
+            --suite-name ${{ github.repository }} \
+            --run-stage ci \
+            --report-output log \
+            --log-level info \
+            ${PROM_FLAG} \
+            "/tests/${JSON_FILE#./}"
 
-      - name: Run Grafana Bench (Docker image)
+      - name: Run Grafana Bench (released Docker image)
         if: inputs.bench-ref == ''
         env:
           PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
@@ -392,35 +419,9 @@ jobs:
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
             ${{ inputs.bench-image }} report \
             --report-input trufflehog \
-            --service trufflehog \
-            --service-version ${{ github.sha }} \
-            --suite-name ${{ github.repository }}/trufflehog \
+            --suite-name ${{ github.repository }} \
             --run-stage ci \
             --report-output log \
             --log-level info \
             ${PROM_FLAG} \
             "/tests/${JSON_FILE#./}"
-
-      - name: Run Grafana Bench (from ref)
-        if: inputs.bench-ref != ''
-        env:
-          PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
-          PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
-          PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
-        run: |
-          JSON_FILE=$(find . -name "results.json" -type f | head -n 1)
-          if [ -z "${JSON_FILE}" ]; then
-            echo "::error::No results.json found; scan job must upload the trufflehog_scan artifact."
-            exit 1
-          fi
-          PROM_FLAG=""; [ -n "${PROMETHEUS_URL}" ] && PROM_FLAG="--prometheus-metrics"
-          ./bench-src/grafana-bench report \
-            --report-input trufflehog \
-            --service trufflehog \
-            --service-version ${{ github.sha }} \
-            --suite-name ${{ github.repository }}/trufflehog \
-            --run-stage ci \
-            --report-output log \
-            --log-level info \
-            ${PROM_FLAG} \
-            "${JSON_FILE}"
