@@ -392,7 +392,7 @@ jobs:
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
             ${{ inputs.bench-image }} report \
             --report-input trufflehog \
-            --service ${{ format('grafana-{0}', github.repository) }} \
+            --service trufflehog \
             --service-version ${{ github.sha }} \
             --suite-name ${{ github.repository }}/trufflehog \
             --run-stage ci \
@@ -416,7 +416,7 @@ jobs:
           PROM_FLAG=""; [ -n "${PROMETHEUS_URL}" ] && PROM_FLAG="--prometheus-metrics"
           ./bench-src/grafana-bench report \
             --report-input trufflehog \
-            --service ${{ format('grafana-{0}', github.repository) }} \
+            --service trufflehog \
             --service-version ${{ github.sha }} \
             --suite-name ${{ github.repository }}/trufflehog \
             --run-stage ci \
