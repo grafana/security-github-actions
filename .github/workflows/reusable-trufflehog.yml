@@ -44,6 +44,14 @@ on:
         default: ""
         type: string
 
+    secrets:
+      BENCH_REPO_TOKEN:
+        description: |
+          GitHub token with read access to grafana/grafana-bench (required when bench-ref is set).
+          grafana-bench is a private repo so the default GITHUB_TOKEN won't work.
+          Pass a PAT or app token that has access: secrets: inherit or explicit secret mapping.
+        required: false
+
 permissions:
   contents: read
   pull-requests: write
@@ -357,6 +365,7 @@ jobs:
           repository: grafana/grafana-bench
           ref: ${{ inputs.bench-ref }}
           path: bench-src
+          token: ${{ secrets.BENCH_REPO_TOKEN }}
 
       - name: Build grafana-bench Docker image from ref
         if: inputs.bench-ref != ''
