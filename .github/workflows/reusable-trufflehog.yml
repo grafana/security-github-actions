@@ -382,7 +382,8 @@ jobs:
           PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
           PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
           PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
-          SUITE_NAME: ${{ github.repository }}
+          SUITE_NAME: ${{ github.repository }}/trufflehog
+          SERVICE_VERSION: ${{ github.sha }}
         run: |
           JSON_FILE=$(find . -name "results.json" -not -path "./bench-src/*" -type f | head -n 1)
           if [ -z "${JSON_FILE}" ]; then
@@ -391,12 +392,15 @@ jobs:
           fi
           PROM_FLAG=""; [ -n "${PROMETHEUS_URL}" ] && PROM_FLAG="--prometheus-metrics"
           docker run --rm \
+            --network=host \
             --volume="${PWD}:/tests/" \
             -e PROMETHEUS_URL="${PROMETHEUS_URL}" \
             -e PROMETHEUS_USER="${PROMETHEUS_USER}" \
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
             grafana-bench:bench-ref report \
             --report-input trufflehog \
+            --service trufflehog \
+            --service-version "${SERVICE_VERSION}" \
             --suite-name "${SUITE_NAME}" \
             --run-stage ci \
             --report-output log \
@@ -411,7 +415,8 @@ jobs:
           PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
           PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
           BENCH_IMAGE: ${{ inputs.bench-image }}
-          SUITE_NAME: ${{ github.repository }}
+          SUITE_NAME: ${{ github.repository }}/trufflehog
+          SERVICE_VERSION: ${{ github.sha }}
         run: |
           JSON_FILE=$(find . -name "results.json" -type f | head -n 1)
           if [ -z "${JSON_FILE}" ]; then
@@ -431,6 +436,8 @@ jobs:
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
             "${BENCH_IMAGE}" report \
             --report-input trufflehog \
+            --service trufflehog \
+            --service-version "${SERVICE_VERSION}" \
             --suite-name "${SUITE_NAME}" \
             --run-stage ci \
             --report-output log \
