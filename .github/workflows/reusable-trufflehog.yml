@@ -230,15 +230,6 @@ jobs:
               echo "${FINDINGS}"
               echo ''
               echo "${ACTION_TEXT}"
-              echo ''
-              echo '---'
-              echo ''
-              echo '**Ignoring False Positives:**'
-              echo 'To mark a false positive, add `# trufflehog:ignore` as an inline comment on the same line as the detected secret:'
-              echo '```'
-              echo 'my_fake_secret = "AKIAIOSFODNN7EXAMPLE"  # trufflehog:ignore'
-              echo '```'
-              echo 'This works for files that support line numbers (most source files). After adding the comment, push your changes and the scan will re-run.'
               echo 'EOF'
             } >> "$GITHUB_OUTPUT"
           fi
