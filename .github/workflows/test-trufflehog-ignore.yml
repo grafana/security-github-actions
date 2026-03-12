@@ -1,0 +1,14 @@
+name: Test TruffleHog Ignore
+
+on:
+  pull_request:
+  push:
+    branches:
+      - add-trufflehog-ignore-docs
+
+jobs:
+  test-trufflehog:
+    uses: ./.github/workflows/reusable-trufflehog.yml
+    with:
+      fail-on-verified: "false"
+      fail-on-unverified: "false"
