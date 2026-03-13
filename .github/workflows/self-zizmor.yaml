@@ -32,7 +32,7 @@ jobs:
           fi
           echo "found-files=${FOUND_FILES}" >> $GITHUB_OUTPUT
   zizmor:
-    name: Run zizmor
+    name: Run zizmor from current branch (self test)
 
     permissions:
       actions: read
