@@ -35,12 +35,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: true
-
-      - name: Fetch base and head commits
-        if: github.event_name == 'pull_request'
-        run: git fetch --depth=1 origin ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
 
       - name: Remove persisted credentials
         run: git config --unset-all http.https://github.com/.extraheader
@@ -88,36 +84,36 @@ jobs:
 
       - name: Scan for secrets
         id: scan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MG_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MG_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
         run: |
           set +e
           echo "[]" > results.json
 
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # PR: Scan only changed files (using two-dot diff with explicit base SHA)
-            echo "Scanning changed files in PR..."
-            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed-files.txt
-
-            if [[ -s changed-files.txt ]]; then
-              while IFS= read -r file; do
-                # Get just the filename
-                filename=$(basename "$file")
-
-                # Skip excluded files (use case statement for cleaner matching)
-                case "$filename" in
-                  go.sum|go.mod|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|poetry.lock|Pipfile.lock|uv.lock|Cargo.lock|Gemfile.lock|grafana.json)
-                    echo "Skipping: ${file} (excluded manifest/lock file)"
-                    continue
-                    ;;
-                esac
-
-                if [[ -f "${file}" ]]; then
-                  echo "Scanning: ${file}"
-                  trufflehog filesystem "${file}" --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified >> results.ndjson || true
-                fi
-              done < changed-files.txt
-            else
-              echo "No files changed"
-            fi
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            echo "Scanning PR commits..."
+            trufflehog git file://. \
+              --since-commit="${PR_BASE_SHA}" \
+              --branch="${PR_HEAD_SHA}" \
+              --no-update \
+              --json \
+              --results=verified,unverified \
+              --exclude-paths /tmp/trufflehog-exclude.txt \
+              > results.ndjson || true
+          elif [[ "${EVENT_NAME}" == "merge_group" ]]; then
+            echo "Scanning merge group commits..."
+            trufflehog git file://. \
+              --since-commit="${MG_BASE_SHA}" \
+              --branch="${MG_HEAD_SHA}" \
+              --no-update \
+              --json \
+              --results=verified,unverified \
+              --exclude-paths /tmp/trufflehog-exclude.txt \
+              > results.ndjson || true
           else
             # Push to main: Scan current filesystem
             echo "Scanning current filesystem..."
@@ -171,26 +167,29 @@ jobs:
 
       - name: Delete resolved comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total == '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # Find and delete TruffleHog comment if secrets have been resolved
-          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | select(.body | contains("<!-- trufflehog-secret-scan-comment -->")) | .id' | head -1 || echo "")
+          COMMENT_ID=$(gh api repos/${REPO}/issues/${PR_NUMBER}/comments --jq '.[] | select(.body | contains("<!-- trufflehog-secret-scan-comment -->")) | .id' | head -1 || echo "")
 
           if [[ -n "$COMMENT_ID" ]]; then
             echo "Secrets resolved - deleting previous warning comment (ID: ${COMMENT_ID})"
-            gh api -X DELETE /repos/${{ github.repository }}/issues/comments/${COMMENT_ID}
+            gh api -X DELETE /repos/${REPO}/issues/comments/${COMMENT_ID}
             echo "Comment deleted successfully"
           else
             echo "No existing TruffleHog comment to delete"
           fi
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Generate PR comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total > 0 }}
         id: comment-body
+        env:
+          VERIFIED: ${{ steps.scan.outputs.verified }}
+          UNVERIFIED: ${{ steps.scan.outputs.unverified }}
         run: |
-          VERIFIED=${{ steps.scan.outputs.verified }}
-          UNVERIFIED=${{ steps.scan.outputs.unverified }}
           TOTAL=$((VERIFIED+UNVERIFIED))
 
           if [[ $TOTAL -eq 0 ]]; then
@@ -256,19 +255,24 @@ jobs:
       - name: Create scan report
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          TOTAL: ${{ steps.scan.outputs.total }}
+          VERIFIED: ${{ steps.scan.outputs.verified }}
+          UNVERIFIED: ${{ steps.scan.outputs.unverified }}
         run: |
           {
             echo "TruffleHog Scan Report"
             echo "====================="
             echo "Date: $(date)"
-            echo "Repository: ${{ github.repository }}"
+            echo "Repository: ${REPO}"
             echo "Branch: ${GITHUB_REF_NAME}"
-            echo "Commit: ${{ github.sha }}"
+            echo "Commit: ${COMMIT_SHA}"
             echo ""
             echo "Summary:"
-            echo "- Total secrets: ${{ steps.scan.outputs.total }}"
-            echo "- Verified: ${{ steps.scan.outputs.verified }}"
-            echo "- Unverified: ${{ steps.scan.outputs.unverified }}"
+            echo "- Total secrets: ${TOTAL}"
+            echo "- Verified: ${VERIFIED}"
+            echo "- Unverified: ${UNVERIFIED}"
             echo ""
             echo "Detailed Results:"
             if [[ -f "results.json" && -s "results.json" ]] && jq empty results.json 2>/dev/null; then
