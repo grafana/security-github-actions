@@ -53,6 +53,7 @@ jobs:
       min-severity: high
       min-confidence: low
       extra-args: --offline
-      send-bench-metrics: true
-    # Grafana Bench: pass PROMETHEUS_URL (and optionally PROMETHEUS_USER, PROMETHEUS_PASSWORD) for metrics; GAR access for Docker image.
+      # Only send metrics from grafana org; fork PRs don't have OIDC/Vault access.
+      send-bench-metrics: ${{ github.repository_owner == 'grafana' }}
+    # Grafana Bench: reusable workflow fetches Prometheus creds from Vault when send-bench-metrics is true (grafana org only).
     secrets: inherit
