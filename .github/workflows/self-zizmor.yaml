@@ -52,8 +52,6 @@ jobs:
       min-severity: high
       min-confidence: low
       extra-args: --offline
-      # Only send metrics from grafana org; fork PRs don't have OIDC/Vault access.
+      # Gate at caller: only opt-in when grafana org; reusable workflow also gates on org + non-fork PR (OIDC/Vault not available on fork PRs).
       send-bench-metrics: ${{ github.repository_owner == 'grafana' }}
-    # Grafana Bench: reusable workflow fetches Prometheus creds from Vault when send-bench-metrics is true (grafana org only).
-    # Requires: repo in grafana org; Vault OIDC role allows this repo to read grafana-bench (prometheus_url, prometheus_user, prometheus_token).
     secrets: inherit
