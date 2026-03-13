@@ -19,6 +19,39 @@ on:
         default: "ubuntu-latest"
         type: string
 
+      send-bench-metrics:
+        description: |
+          If true, run Grafana Bench after the scan to send TruffleHog metrics to Prometheus.
+          Requires PROMETHEUS_URL (and optionally PROMETHEUS_USER, PROMETHEUS_PASSWORD);
+          caller must use secrets: inherit.
+        required: false
+        type: boolean
+        default: true
+
+      bench-image:
+        description: |
+          Full Docker image (including tag) for Grafana Bench report step.
+          Use an image that includes TruffleHog report support (e.g. v1.0.2+ or dev-latest from main).
+        required: false
+        default: "us-docker.pkg.dev/grafanalabs-global/docker-grafana-bench-prod/grafana-bench:v1.0.1"
+        type: string
+
+      bench-ref:
+        description: |
+          Git ref (branch or tag) of grafana/grafana-bench to build and run instead of using bench-image.
+          Use this to run the TruffleHog parser from a branch (e.g. trufflehog-poc) before it is released.
+        required: false
+        default: ""
+        type: string
+
+    secrets:
+      BENCH_REPO_TOKEN:
+        description: |
+          GitHub token with read access to grafana/grafana-bench (required when bench-ref is set).
+          grafana-bench is a private repo so the default GITHUB_TOKEN won't work.
+          Pass a PAT or app token that has access: secrets: inherit or explicit secret mapping.
+        required: false
+
 permissions:
   contents: read
   pull-requests: write
@@ -308,3 +341,115 @@ jobs:
             echo "Workflow failed due to secrets found (verified: ${VERIFIED_COUNT}, unverified: ${UNVERIFIED_COUNT})"
             exit 1
           fi
+
+  grafana-bench:
+    name: Send TruffleHog metrics to Prometheus via Grafana Bench
+    needs: [trufflehog-scan]
+    if: ${{ inputs.send-bench-metrics && always() && !cancelled() && (needs.trufflehog-scan.result == 'success' || needs.trufflehog-scan.result == 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+
+      - name: Login to GAR (for Bench image)
+        if: inputs.bench-ref == ''
+        uses: grafana/shared-workflows/actions/login-to-gar@login-to-gar/v1.0.1
+        continue-on-error: true
+        with:
+          registry: us-docker.pkg.dev
+
+      - name: Download TruffleHog results artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: trufflehog_scan
+
+      - name: Checkout grafana-bench at ref
+        if: inputs.bench-ref != ''
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          repository: grafana/grafana-bench
+          ref: ${{ inputs.bench-ref }}
+          path: bench-src
+          token: ${{ secrets.BENCH_REPO_TOKEN }}
+
+      - name: Build grafana-bench Docker image from ref
+        if: inputs.bench-ref != ''
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: bench-src
+          file: bench-src/Dockerfile
+          load: true
+          tags: grafana-bench:bench-ref
+
+      - name: Run Grafana Bench (Docker image from ref)
+        if: inputs.bench-ref != ''
+        env:
+          PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+          PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
+          PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
+          SUITE_NAME: ${{ github.repository }}/trufflehog
+          SERVICE_VERSION: ${{ github.sha }}
+        run: |
+          JSON_FILE=$(find . -name "results.json" -not -path "./bench-src/*" -type f | head -n 1)
+          if [ -z "${JSON_FILE}" ]; then
+            echo "::error::No results.json found; scan job must upload the trufflehog_scan artifact."
+            exit 1
+          fi
+          PROM_FLAG=""; [ -n "${PROMETHEUS_URL}" ] && PROM_FLAG="--prometheus-metrics"
+          docker run --rm \
+            --network=host \
+            --volume="${PWD}:/tests/" \
+            -e PROMETHEUS_URL="${PROMETHEUS_URL}" \
+            -e PROMETHEUS_USER="${PROMETHEUS_USER}" \
+            -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
+            grafana-bench:bench-ref report \
+            --report-input trufflehog \
+            --service trufflehog \
+            --service-version "${SERVICE_VERSION}" \
+            --suite-name "${SUITE_NAME}" \
+            --run-stage ci \
+            --report-output log \
+            --log-level info \
+            ${PROM_FLAG} \
+            "/tests/${JSON_FILE#./}"
+
+      - name: Run Grafana Bench (released Docker image)
+        if: inputs.bench-ref == ''
+        env:
+          PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+          PROMETHEUS_USER: ${{ secrets.PROMETHEUS_USER }}
+          PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
+          BENCH_IMAGE: ${{ inputs.bench-image }}
+          SUITE_NAME: ${{ github.repository }}/trufflehog
+          SERVICE_VERSION: ${{ github.sha }}
+        run: |
+          JSON_FILE=$(find . -name "results.json" -type f | head -n 1)
+          if [ -z "${JSON_FILE}" ]; then
+            echo "::error::No results.json found; scan job must upload the trufflehog_scan artifact."
+            exit 1
+          fi
+          if ! docker pull "${BENCH_IMAGE}"; then
+            echo "Could not pull Bench image; skipping bench step."
+            exit 0
+          fi
+          PROM_FLAG=""; [ -n "${PROMETHEUS_URL}" ] && PROM_FLAG="--prometheus-metrics"
+          docker run --rm \
+            --network=host \
+            --volume="${PWD}:/tests/" \
+            -e PROMETHEUS_URL="${PROMETHEUS_URL}" \
+            -e PROMETHEUS_USER="${PROMETHEUS_USER}" \
+            -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
+            "${BENCH_IMAGE}" report \
+            --report-input trufflehog \
+            --service trufflehog \
+            --service-version "${SERVICE_VERSION}" \
+            --suite-name "${SUITE_NAME}" \
+            --run-stage ci \
+            --report-output log \
+            --log-level info \
+            ${PROM_FLAG} \
+            "/tests/${JSON_FILE#./}"
