@@ -52,6 +52,6 @@ jobs:
       min-severity: high
       min-confidence: low
       extra-args: --offline
-      # Gate at caller: only opt-in when grafana org; reusable workflow also gates on org + non-fork PR (OIDC/Vault not available on fork PRs).
-      send-bench-metrics: ${{ github.repository_owner == 'grafana' }}
+      # Reusable workflow gates bench job on org + non-fork PR (OIDC/Vault not available on fork PRs); pass true to opt in.
+      send-bench-metrics: true
     secrets: inherit
