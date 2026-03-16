@@ -334,7 +334,9 @@ jobs:
 
       - name: Send TruffleHog metrics to Prometheus via Grafana Bench
         env:
+          BENCH_SERVICE: ${{ format('grafana-{0}', github.event.repository.name) }}
           BENCH_SUITE_NAME: ${{ github.event.repository.name }}/trufflehog
+          BENCH_SERVICE_VERSION: ${{ github.sha }}
         run: |
           if [ -z "${PROMETHEUS_URL}" ]; then
             echo "::error::PROMETHEUS_URL not set; Vault step may have failed."
@@ -352,8 +354,8 @@ jobs:
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
             ghcr.io/grafana/grafana-bench:v1.0.4 report \
             --report-input trufflehog \
-            --service trufflehog \
-            --service-version "${TRUFFLEHOG_VERSION}" \
+            --service "${BENCH_SERVICE}" \
+            --service-version "${BENCH_SERVICE_VERSION}" \
             --suite-name "${BENCH_SUITE_NAME}" \
             --run-stage ci \
             --report-output log \
