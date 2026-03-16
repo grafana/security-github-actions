@@ -308,3 +308,55 @@ jobs:
             echo "Workflow failed due to secrets found (verified: ${VERIFIED_COUNT}, unverified: ${UNVERIFIED_COUNT})"
             exit 1
           fi
+
+  grafana-bench:
+    name: Send TruffleHog metrics to Prometheus via Grafana Bench
+    needs: [trufflehog-scan]
+    # Only run for grafana org and non-fork PRs (fork PRs have no OIDC/Vault access).
+    if: ${{ github.repository_owner == 'grafana' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && always() && !cancelled() && (needs.trufflehog-scan.result == 'success' || needs.trufflehog-scan.result == 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Get Prometheus secrets from Vault
+        uses: grafana/shared-workflows/actions/get-vault-secrets@078c4a8af09e06d646077550f9e0f68171d5881e # get-vault-secrets/v1.3.1
+        with:
+          common_secrets: |
+            PROMETHEUS_URL=grafana-bench:prometheus_url
+            PROMETHEUS_USER=grafana-bench:prometheus_user
+            PROMETHEUS_PASSWORD=grafana-bench:prometheus_token
+
+      - name: Download TruffleHog scan artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: trufflehog_scan
+
+      - name: Send TruffleHog metrics to Prometheus via Grafana Bench
+        env:
+          BENCH_SUITE_NAME: ${{ github.event.repository.name }}/trufflehog
+        run: |
+          if [ -z "${PROMETHEUS_URL}" ]; then
+            echo "::error::PROMETHEUS_URL not set; Vault step may have failed."
+            exit 1
+          fi
+          if ! docker pull ghcr.io/grafana/grafana-bench:v1.0.4; then
+            echo "Could not pull Bench image; skipping bench step."
+            exit 0
+          fi
+          docker run --rm \
+            --network=host \
+            --volume="${PWD}:/tests/" \
+            -e PROMETHEUS_URL="${PROMETHEUS_URL}" \
+            -e PROMETHEUS_USER="${PROMETHEUS_USER}" \
+            -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
+            ghcr.io/grafana/grafana-bench:v1.0.4 report \
+            --report-input trufflehog \
+            --service trufflehog \
+            --service-version "${TRUFFLEHOG_VERSION}" \
+            --suite-name "${BENCH_SUITE_NAME}" \
+            --run-stage ci \
+            --report-output log \
+            --log-level debug \
+            --prometheus-metrics \
+            /tests/results.json
