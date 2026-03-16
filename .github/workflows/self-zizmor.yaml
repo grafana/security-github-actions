@@ -45,14 +45,13 @@ jobs:
       - zizmor-check
     if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@34c8c8ac9e893f60b1f64121dd885c395fd0e642
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@7767d8f1daca94ff2b103a7aa7a8e917a55f55c3
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: high
       min-severity: high
       min-confidence: low
       extra-args: --offline
-      # Bench breaks on forks.
-      send-bench-metrics: false
-    # Grafana Bench: pass PROMETHEUS_URL (and optionally PROMETHEUS_USER, PROMETHEUS_PASSWORD) for metrics; GAR access for Docker image.
+      # Reusable workflow gates bench job on org + non-fork PR (OIDC/Vault not available on fork PRs); pass true to opt in.
+      send-bench-metrics: true
     secrets: inherit
