@@ -284,7 +284,7 @@ jobs:
           } > trufflehog_scan.txt
 
       - name: Upload scan results
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         if: always()
         with:
           name: trufflehog_scan
@@ -333,7 +333,7 @@ jobs:
             PROMETHEUS_PASSWORD=grafana-bench:prometheus_token
 
       - name: Download TruffleHog scan artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: trufflehog_scan
 
