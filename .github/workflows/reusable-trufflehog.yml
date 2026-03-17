@@ -18,6 +18,11 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
+      send-bench-metrics:
+        description: "If true, run Grafana Bench after scan (requires Vault Prometheus creds). Job only runs for grafana org and non-fork PRs; fork PRs have no OIDC/Vault access."
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -313,7 +318,7 @@ jobs:
     name: Send TruffleHog metrics to Prometheus via Grafana Bench
     needs: [trufflehog-scan]
     # Only run for grafana org and non-fork PRs (fork PRs have no OIDC/Vault access).
-    if: ${{ github.repository_owner == 'grafana' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && always() && !cancelled() && (needs.trufflehog-scan.result == 'success' || needs.trufflehog-scan.result == 'failure') }}
+    if: ${{ github.repository_owner == 'grafana' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && inputs.send-bench-metrics && always() && !cancelled() && (needs.trufflehog-scan.result == 'success' || needs.trufflehog-scan.result == 'failure') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
