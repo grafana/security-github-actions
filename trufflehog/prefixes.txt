@@ -1,4 +1,4 @@
-# How to add a directory exclusion (no regex — one path per line):
+# How to add an exclusion (no regex — one repo-relative path per line; directory or file):
 #
 #   1. Add a line below (repo-relative path, use /), e.g.  docs/imported
 #   2. From the repo root, run:  ./trufflehog/update-excludes.sh
@@ -11,3 +11,4 @@
 
 vendor
 content/grafana/dashboards
+content/about/404.md
