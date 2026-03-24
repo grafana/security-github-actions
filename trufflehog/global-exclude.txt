@@ -24,3 +24,6 @@ path:grafana\.json$
 # Go vendor/ directory (standard Go vendoring): third-party code and large data
 # files (e.g. golang.org/x/net/publicsuffix) are not repo secrets; TruffleHog often false-positives there.
 (^|[/\\])vendor([/\\]|$)
+
+# User-supplied Grafana dashboards checked into site repos (e.g. *.md / JSON); not org-managed secrets.
+(^|[/\\])content/grafana/dashboards([/\\]|$)
