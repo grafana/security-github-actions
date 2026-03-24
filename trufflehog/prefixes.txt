@@ -1,0 +1,5 @@
+# One repo-relative directory prefix per line (forward slashes). No regex.
+# Regenerate: python3 trufflehog/build_exclude_file.py > trufflehog/global-exclude.txt
+
+vendor
+content/grafana/dashboards
