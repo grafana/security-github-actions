@@ -51,20 +51,52 @@ jobs:
         run: git config --unset-all http.https://github.com/.extraheader
 
       - name: Fetch org-wide TruffleHog exclude patterns
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-        with:
-          repository: grafana/security-github-actions
-          ref: main
-          path: .trufflehog-shared
-          sparse-checkout: |
-            trufflehog/global-exclude.txt
-          sparse-checkout-cone-mode: false
-
-      - name: Stage exclude file for TruffleHog
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          cp .trufflehog-shared/trufflehog/global-exclude.txt /tmp/trufflehog-exclude.txt
-          echo "Using org-wide exclude patterns:"
-          cat /tmp/trufflehog-exclude.txt
+          DEST=/tmp/trufflehog-exclude.txt
+          REPO=grafana/security-github-actions
+          REF=main
+          # Load trufflehog/global-exclude.txt from main (edit that file for org-wide excludes).
+          RAW_URL="https://raw.githubusercontent.com/grafana/security-github-actions/${REF}/trufflehog/global-exclude.txt"
+          if gh api "repos/${REPO}/contents/trufflehog/global-exclude.txt?ref=${REF}" \
+              -H "Accept: application/vnd.github.v3.raw" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+            echo "Loaded exclude patterns from ${REPO}@${REF} (GitHub API)"
+          elif curl -fsSL "${RAW_URL}" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+            echo "Loaded exclude patterns from raw.githubusercontent.com (${REF})"
+          else
+            echo "::warning::Could not fetch trufflehog/global-exclude.txt from ${REPO}@${REF} (not on branch yet, or GITHUB_TOKEN cannot read that repo). Using bundled fallback — merge exclusions to main or allow workflows to read internal repos."
+            # Keep in sync with trufflehog/global-exclude.txt (used only when fetch fails).
+            cat > "${DEST}" <<'EOF'
+          # TruffleHog --exclude-paths: one Go regexp per non-blank, non-# line.
+          #
+          # To change org-wide behavior: edit this file and merge to security-github-actions main.
+          # Consumer repos load it at runtime via the GitHub API (no changes needed in those repos).
+
+          # Lock files and checksums (contain hashes, not secrets)
+          path:go\.sum$
+          path:go\.mod$
+
+          # Dependency manifests (contain URLs that trigger false positives)
+          path:package\.json$
+          path:package-lock\.json$
+          path:pnpm-lock\.yaml$
+          path:yarn\.lock$
+          path:poetry\.lock$
+          path:Pipfile\.lock$
+          path:uv\.lock$
+          path:Cargo\.lock$
+          path:Gemfile\.lock$
+
+          # Grafana plugin metadata
+          path:grafana\.json$
+
+          # Go vendored dependencies (third-party blobs; high false-positive rate)
+          (^|[/\\])vendor([/\\]|$)
+          EOF
+          fi
+          echo "--- effective exclude file ---"
+          cat "${DEST}"
 
       - name: Install TruffleHog
         run: |

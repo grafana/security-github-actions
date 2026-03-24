@@ -1,8 +1,7 @@
-# TruffleHog --exclude-paths patterns (one Go regexp per non-empty, non-comment line).
-# Edit this file to tune false positives for all repos that use reusable-trufflehog.yml.
-
-# Sparse checkout of security-github-actions used only to load this file in CI
-(^|[/\\])\.trufflehog-shared([/\\]|$)
+# TruffleHog --exclude-paths: one Go regexp per non-blank, non-# line.
+#
+# To change org-wide behavior: edit this file and merge to security-github-actions main.
+# Consumer repos load it at runtime via the GitHub API (no changes needed in those repos).
 
 # Lock files and checksums (contain hashes, not secrets)
 path:go\.sum$
