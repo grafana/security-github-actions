@@ -122,12 +122,124 @@ jobs:
           set +e
           echo "[]" > results.json
 
+          # Classify paths vs /tmp/trufflehog-exclude.txt (Python re ~ TruffleHog Go regexp for our patterns).
+          cat > /tmp/trufflehog_exclude_helpers.py <<'ENDHELPER'
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          MANIFEST = frozenset({
+              "go.sum", "go.mod", "package.json", "package-lock.json", "pnpm-lock.yaml",
+              "yarn.lock", "poetry.lock", "Pipfile.lock", "uv.lock", "Cargo.lock",
+              "Gemfile.lock", "grafana.json",
+          })
+
+          _PATS = None
+
+          def load_patterns():
+              global _PATS
+              if _PATS is not None:
+                  return _PATS
+              pats = []
+              p = Path("/tmp/trufflehog-exclude.txt")
+              if not p.is_file():
+                  _PATS = pats
+                  return pats
+              for line in p.read_text().splitlines():
+                  line = line.strip()
+                  if not line or line.startswith("#"):
+                      continue
+                  try:
+                      pats.append(re.compile(line))
+                  except re.error:
+                      print(f"::warning::Invalid regex in exclude file (ignored for skip log): {line!r}", file=sys.stderr)
+              _PATS = pats
+              return pats
+
+          def vendor_skip(path: str) -> bool:
+              return path.startswith("vendor/") or "/vendor/" in path
+
+          def manifest_skip(path: str) -> bool:
+              return Path(path).name in MANIFEST
+
+          def exclude_match(path: str):
+              for r in load_patterns():
+                  if r.search(path):
+                      return r.pattern
+              return None
+
+          def main():
+              cmd = sys.argv[1]
+              if cmd == "match":
+                  path = sys.argv[2]
+                  m = exclude_match(path)
+                  if m:
+                      print(m)
+                      sys.exit(0)
+                  sys.exit(1)
+              if cmd == "report-pr":
+                  cfp = Path("changed-files.txt")
+                  lines = [ln.strip() for ln in cfp.read_text().splitlines() if ln.strip()] if cfp.is_file() else []
+                  sk_v, sk_m, sk_e, scan = [], [], [], []
+                  for f in lines:
+                      if vendor_skip(f):
+                          sk_v.append(f)
+                      elif manifest_skip(f):
+                          sk_m.append(f)
+                      else:
+                          pat = exclude_match(f)
+                          if pat:
+                              sk_e.append((f, pat))
+                          else:
+                              scan.append(f)
+                  def block(title, items, detail=False):
+                      print(f"{title} ({len(items)}):")
+                      for x in items[:500]:
+                          if detail:
+                              print(f"  - {x[0]}  (regex: {x[1]})")
+                          else:
+                              print(f"  - {x}")
+                      if len(items) > 500:
+                          print(f"  ... and {len(items) - 500} more")
+
+                  print("")
+                  print("=== TruffleHog exclusion report (PR changed files) ===")
+                  block("Skipped — Go vendor/", sk_v)
+                  block("Skipped — manifest / lock basename", sk_m)
+                  block("Skipped — exclude file regex", sk_e, detail=True)
+                  block("Will run TruffleHog on", scan)
+                  print("=== End exclusion report ===")
+                  print("")
+                  return
+              if cmd == "report-push":
+                  r = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=False)
+                  paths = [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
+                  matched = [(p, exclude_match(p)) for p in paths if exclude_match(p)]
+                  print("")
+                  print(f"=== Sample: tracked paths matching exclude regexes ({len(matched)} total, show first 200) ===")
+                  for p, pat in matched[:200]:
+                      print(f"  - {p}  (regex: {pat})")
+                  if len(matched) > 200:
+                      print(f"  ... and {len(matched) - 200} more")
+                  print("(Untracked files can also match; TruffleHog still applies excludes on full scan.)")
+                  print("=== End exclude sample ===")
+                  print("")
+                  return
+              print("unknown command", cmd, file=sys.stderr)
+              sys.exit(1)
+
+          if __name__ == "__main__":
+              main()
+          ENDHELPER
+
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             # PR: Scan only changed files (using two-dot diff with explicit base SHA)
             echo "Scanning changed files in PR..."
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed-files.txt
 
             if [[ -s changed-files.txt ]]; then
+              python3 /tmp/trufflehog_exclude_helpers.py report-pr
               while IFS= read -r file; do
                 if [[ "$file" == vendor/* || "$file" == */vendor/* ]]; then
                   echo "Skipping: ${file} (Go vendor directory)"
@@ -145,6 +257,11 @@ jobs:
                     ;;
                 esac
 
+                if pat=$(python3 /tmp/trufflehog_exclude_helpers.py match "$file" 2>/dev/null); then
+                  echo "Skipping: ${file} (exclude file regex: ${pat})"
+                  continue
+                fi
+
                 if [[ -f "${file}" ]]; then
                   echo "Scanning: ${file}"
                   trufflehog filesystem "${file}" --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified >> results.ndjson || true
@@ -156,6 +273,7 @@ jobs:
           else
             # Push to main: Scan current filesystem
             echo "Scanning current filesystem..."
+            python3 /tmp/trufflehog_exclude_helpers.py report-push
             trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
           fi
 
