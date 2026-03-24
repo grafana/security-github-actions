@@ -91,7 +91,8 @@ jobs:
           # Grafana plugin metadata
           path:grafana\.json$
 
-          # Go vendored dependencies (third-party blobs; high false-positive rate)
+          # Go vendor/ directory (standard Go vendoring): third-party code and large data
+          # files (e.g. golang.org/x/net/publicsuffix) are not repo secrets; TruffleHog often false-positives there.
           (^|[/\\])vendor([/\\]|$)
           EOF
           fi
