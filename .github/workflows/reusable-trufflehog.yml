@@ -308,8 +308,12 @@ jobs:
                 # Filter out CHANGELOG git hashes if we have results
                 if jq -e 'length > 0' results.json >/dev/null 2>&1; then
                   jq '[.[] | select(
-                    ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
-                    !(($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and (.Raw | test("^[0-9a-f]{7,40}$"; "i")))
+                    (
+                      (try .SourceMetadata.Data.Filesystem.file catch null) //
+                      (try .SourceMetadata.Data.Git.file catch null) //
+                      ""
+                    ) as $file |
+                    ((($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and (.Raw | test("^[0-9a-f]{7,40}$"; "i"))) | not)
                   )]' results.json > results.json.tmp && mv results.json.tmp results.json
                 fi
               else
@@ -379,9 +383,9 @@ jobs:
               "- " +
               (if .Verified then "**VERIFIED SECRET**" else "**Possible secret**" end) +
               " (" + .DetectorName + ") at `" +
-              ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") +
+              (((try .SourceMetadata.Data.Filesystem.file catch null) // (try .SourceMetadata.Data.Git.file catch null)) // "unknown") +
               ":" +
-              ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) +
+              (((try .SourceMetadata.Data.Filesystem.line catch null) // (try .SourceMetadata.Data.Git.line catch null)) | tostring) +
               "` → `" +
               (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end) +
               "`"' results.json 2>/dev/null || echo "- Error processing results")
@@ -444,7 +448,7 @@ jobs:
             echo ""
             echo "Detailed Results:"
             if [[ -f "results.json" && -s "results.json" ]] && jq empty results.json 2>/dev/null; then
-              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") + ":" + ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' results.json 2>/dev/null || echo "Error processing results"
+              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + (((try .SourceMetadata.Data.Filesystem.file catch null) // (try .SourceMetadata.Data.Git.file catch null)) // "unknown") + ":" + (((try .SourceMetadata.Data.Filesystem.line catch null) // (try .SourceMetadata.Data.Git.line catch null)) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' results.json 2>/dev/null || echo "Error processing results"
             else
               echo "No secrets detected"
             fi
