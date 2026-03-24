@@ -60,7 +60,7 @@ jobs:
           else
             ARCH="linux_amd64"
           fi
-BINARY_URL="https://github.com/trufflesecurity/trufflehog/releases/download/${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION#v}_${ARCH}.tar.gz"
+          BINARY_URL="https://github.com/trufflesecurity/trufflehog/releases/download/${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION#v}_${ARCH}.tar.gz"
 
           curl -sSfL "${BINARY_URL}" | tar -xz -C /tmp
           sudo mv /tmp/trufflehog /usr/local/bin/trufflehog
