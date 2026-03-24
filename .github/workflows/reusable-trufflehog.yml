@@ -30,7 +30,7 @@ permissions:
 
 env:
   # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
-  TRUFFLEHOG_VERSION: 3.89.2
+  TRUFFLEHOG_VERSION: v3.94.0
 
 jobs:
   trufflehog-scan:
@@ -53,14 +53,14 @@ jobs:
       - name: Install TruffleHog
         run: |
           # Download binary directly from GitHub releases for supply chain security
-          VERSION="v${{ env.TRUFFLEHOG_VERSION }}"
+          echo "Using Trufflehog version: $TRUFFLEHOG_VERSION"
           # Auto-detect architecture for cross-platform support
           if [[ "$(uname -m)" == "aarch64" ]]; then
             ARCH="linux_arm64"
           else
             ARCH="linux_amd64"
           fi
-          BINARY_URL="https://github.com/trufflesecurity/trufflehog/releases/download/${VERSION}/trufflehog_${VERSION#v}_${ARCH}.tar.gz"
+          BINARY_URL="https://github.com/trufflesecurity/trufflehog/releases/download/${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION#v}_${ARCH}.tar.gz"
 
           curl -sSfL "${BINARY_URL}" | tar -xz -C /tmp
           sudo mv /tmp/trufflehog /usr/local/bin/trufflehog
