@@ -9,6 +9,4 @@
 #
 # Lockfiles (go.sum, package.json, …) are listed in trufflehog/build_exclude_file.py if you need to change those.
 
-vendor
 content/grafana/dashboards
-content/about/404.md

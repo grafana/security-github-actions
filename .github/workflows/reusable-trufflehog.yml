@@ -86,12 +86,8 @@ jobs:
           # Generated — do not edit by hand. Edit trufflehog/prefixes.txt then run ./trufflehog/update-excludes.sh
           #
           # --- directory prefixes (from prefixes.txt) ---
-          # prefix: vendor
-          (^|\./|[/\\])vendor([/\\]|$)
           # prefix: content/grafana/dashboards
           (^|\./|[/\\])content/grafana/dashboards([/\\]|$)
-          # prefix: content/about/404.md
-          (^|\./|[/\\])content/about/404\.md([/\\]|$)
 
           # --- static path patterns ---
           # Lock files and checksums (contain hashes, not secrets)
