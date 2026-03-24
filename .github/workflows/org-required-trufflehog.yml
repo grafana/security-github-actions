@@ -23,8 +23,8 @@ jobs:
     name: TruffleHog Secret Scan
     uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@main
     with:
-      # Fail on verified secrets - blocking mode
-      fail-on-verified: "false"      # Block on verified secrets
-      fail-on-unverified: "false"    # Don't block on unverified secrets
+      # Non-blocking: job succeeds; PR still gets comments/artifacts when findings exist
+      fail-on-verified: "false"      # Set "true" to fail on verified secrets
+      fail-on-unverified: "false"    # Set "true" to fail on unverified secrets
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # Use same runner pattern as zizmor
     secrets: inherit

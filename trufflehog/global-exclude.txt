@@ -1,0 +1,26 @@
+# TruffleHog --exclude-paths patterns (one Go regexp per non-empty, non-comment line).
+# Edit this file to tune false positives for all repos that use reusable-trufflehog.yml.
+
+# Sparse checkout of security-github-actions used only to load this file in CI
+(^|[/\\])\.trufflehog-shared([/\\]|$)
+
+# Lock files and checksums (contain hashes, not secrets)
+path:go\.sum$
+path:go\.mod$
+
+# Dependency manifests (contain URLs that trigger false positives)
+path:package\.json$
+path:package-lock\.json$
+path:pnpm-lock\.yaml$
+path:yarn\.lock$
+path:poetry\.lock$
+path:Pipfile\.lock$
+path:uv\.lock$
+path:Cargo\.lock$
+path:Gemfile\.lock$
+
+# Grafana plugin metadata
+path:grafana\.json$
+
+# Go vendored dependencies (third-party blobs; high false-positive rate)
+(^|[/\\])vendor([/\\]|$)

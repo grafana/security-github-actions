@@ -50,6 +50,22 @@ jobs:
       - name: Remove persisted credentials
         run: git config --unset-all http.https://github.com/.extraheader
 
+      - name: Fetch org-wide TruffleHog exclude patterns
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          repository: grafana/security-github-actions
+          ref: main
+          path: .trufflehog-shared
+          sparse-checkout: |
+            trufflehog/global-exclude.txt
+          sparse-checkout-cone-mode: false
+
+      - name: Stage exclude file for TruffleHog
+        run: |
+          cp .trufflehog-shared/trufflehog/global-exclude.txt /tmp/trufflehog-exclude.txt
+          echo "Using org-wide exclude patterns:"
+          cat /tmp/trufflehog-exclude.txt
+
       - name: Install TruffleHog
         run: |
           # Download binary directly from GitHub releases for supply chain security
@@ -67,30 +83,6 @@ jobs:
           sudo chmod +x /usr/local/bin/trufflehog
           trufflehog --version
 
-      - name: Create global exclusions
-        run: |
-          # Create centralized exclusion patterns for common false positives
-          cat > /tmp/trufflehog-exclude.txt <<'EOF'
-          # Lock files and checksums (contain hashes, not secrets)
-          path:go\.sum$
-          path:go\.mod$
-          # Dependency manifests (contain URLs that trigger false positives)
-          path:package\.json$
-          path:package-lock\.json$
-          path:pnpm-lock\.yaml$
-          path:yarn\.lock$
-          path:poetry\.lock$
-          path:Pipfile\.lock$
-          path:uv\.lock$
-          path:Cargo\.lock$
-          path:Gemfile\.lock$
-          # Grafana plugin metadata
-          path:grafana\.json$
-          EOF
-
-          echo "Created global exclusion patterns:"
-          cat /tmp/trufflehog-exclude.txt
-
       - name: Scan for secrets
         id: scan
         run: |
@@ -104,6 +96,11 @@ jobs:
 
             if [[ -s changed-files.txt ]]; then
               while IFS= read -r file; do
+                if [[ "$file" == vendor/* || "$file" == */vendor/* ]]; then
+                  echo "Skipping: ${file} (Go vendor directory)"
+                  continue
+                fi
+
                 # Get just the filename
                 filename=$(basename "$file")
 
