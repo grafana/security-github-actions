@@ -93,10 +93,10 @@ jobs:
 
           # Go vendor/ directory (standard Go vendoring): third-party code and large data
           # files (e.g. golang.org/x/net/publicsuffix) are not repo secrets; TruffleHog often false-positives there.
-          (^|[/\\])vendor([/\\]|$)
+          (^|\./|[/\\])vendor([/\\]|$)
 
           # User-supplied Grafana dashboards checked into site repos (e.g. *.md / JSON); not org-managed secrets.
-          (^|[/\\])content/grafana/dashboards([/\\]|$)
+          (^|\./|[/\\])content/grafana/dashboards([/\\]|$)
           EOF
           fi
           echo "--- effective exclude file ---"
@@ -161,7 +161,11 @@ jobs:
               return pats
 
           def vendor_skip(path: str) -> bool:
-              return path.startswith("vendor/") or "/vendor/" in path
+              return (
+                  path.startswith("vendor/")
+                  or path.startswith("./vendor/")
+                  or "/vendor/" in path
+              )
 
           def manifest_skip(path: str) -> bool:
               return Path(path).name in MANIFEST
@@ -244,7 +248,7 @@ jobs:
             if [[ -s changed-files.txt ]]; then
               python3 /tmp/trufflehog_exclude_helpers.py report-pr
               while IFS= read -r file; do
-                if [[ "$file" == vendor/* || "$file" == */vendor/* ]]; then
+                if [[ "$file" == vendor/* || "$file" == */vendor/* || "$file" == ./vendor/* ]]; then
                   echo "Skipping: ${file} (Go vendor directory)"
                   continue
                 fi
