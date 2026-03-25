@@ -50,6 +50,69 @@ jobs:
       - name: Remove persisted credentials
         run: git config --unset-all http.https://github.com/.extraheader
 
+      - name: Fetch org-wide TruffleHog exclude patterns
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DEST=/tmp/trufflehog-exclude.txt
+          REPO=grafana/security-github-actions
+          REF=main
+          # Source of truth: trufflehog/prefixes.txt (+ static rules in build_exclude_file.py). CI builds the exclude file at runtime.
+          RAW_BASE="https://raw.githubusercontent.com/grafana/security-github-actions/${REF}/trufflehog"
+          RAW_URL="${RAW_BASE}/global-exclude.txt"
+          RAW_BUILD="${RAW_BASE}/build_exclude_file.py"
+          RAW_PREFIXES="${RAW_BASE}/prefixes.txt"
+          if gh api "repos/${REPO}/contents/trufflehog/build_exclude_file.py?ref=${REF}" \
+              -H "Accept: application/vnd.github.v3.raw" -o /tmp/trufflehog_build_exclude_file.py 2>/dev/null \
+            && gh api "repos/${REPO}/contents/trufflehog/prefixes.txt?ref=${REF}" \
+              -H "Accept: application/vnd.github.v3.raw" -o /tmp/trufflehog_prefixes.txt 2>/dev/null \
+            && python3 /tmp/trufflehog_build_exclude_file.py /tmp/trufflehog_prefixes.txt > "${DEST}" 2>/dev/null \
+            && [[ -s "${DEST}" ]]; then
+            echo "Built exclude file from prefixes.txt + build_exclude_file.py (${REPO}@${REF}, GitHub API)"
+          elif curl -fsSL "${RAW_BUILD}" -o /tmp/trufflehog_build_exclude_file.py 2>/dev/null \
+            && curl -fsSL "${RAW_PREFIXES}" -o /tmp/trufflehog_prefixes.txt 2>/dev/null \
+            && python3 /tmp/trufflehog_build_exclude_file.py /tmp/trufflehog_prefixes.txt > "${DEST}" 2>/dev/null \
+            && [[ -s "${DEST}" ]]; then
+            echo "Built exclude file from prefixes.txt + build_exclude_file.py (raw GitHub)"
+          elif gh api "repos/${REPO}/contents/trufflehog/global-exclude.txt?ref=${REF}" \
+              -H "Accept: application/vnd.github.v3.raw" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+            echo "Loaded pre-built global-exclude.txt from ${REPO}@${REF} (GitHub API)"
+          elif curl -fsSL "${RAW_URL}" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+            echo "Loaded pre-built global-exclude.txt from raw.githubusercontent.com (${REF})"
+          else
+            echo "::warning::Could not fetch or rebuild TruffleHog excludes from ${REPO}@${REF}. Using last-resort bundled file — merge to main or fix token access."
+            # Last resort only: must match stdout of python3 trufflehog/build_exclude_file.py (same commit).
+            cat > "${DEST}" <<'EOF'
+          # Built from prefixes.txt + this script (CI does this on every run).
+          # Optional local copy: ./trufflehog/update-excludes.sh > trufflehog/global-exclude.txt
+          #
+          # --- directory prefixes (from prefixes.txt) ---
+          # prefix: content/grafana/dashboards
+          (^|\./|[/\\])content/grafana/dashboards([/\\]|$)
+
+          # --- static path patterns ---
+          # Lock files and checksums (contain hashes, not secrets)
+          path:go\.sum$
+          path:go\.mod$
+
+          # Dependency manifests (contain URLs that trigger false positives)
+          path:package\.json$
+          path:package-lock\.json$
+          path:pnpm-lock\.yaml$
+          path:yarn\.lock$
+          path:poetry\.lock$
+          path:Pipfile\.lock$
+          path:uv\.lock$
+          path:Cargo\.lock$
+          path:Gemfile\.lock$
+
+          # Grafana plugin metadata
+          path:grafana\.json$
+          EOF
+          fi
+          echo "--- effective exclude file ---"
+          cat "${DEST}"
+
       - name: Install TruffleHog
         run: |
           # Download binary directly from GitHub releases for supply chain security
@@ -67,35 +130,126 @@ jobs:
           sudo chmod +x /usr/local/bin/trufflehog
           trufflehog --version
 
-      - name: Create global exclusions
-        run: |
-          # Create centralized exclusion patterns for common false positives
-          cat > /tmp/trufflehog-exclude.txt <<'EOF'
-          # Lock files and checksums (contain hashes, not secrets)
-          path:go\.sum$
-          path:go\.mod$
-          # Dependency manifests (contain URLs that trigger false positives)
-          path:package\.json$
-          path:package-lock\.json$
-          path:pnpm-lock\.yaml$
-          path:yarn\.lock$
-          path:poetry\.lock$
-          path:Pipfile\.lock$
-          path:uv\.lock$
-          path:Cargo\.lock$
-          path:Gemfile\.lock$
-          # Grafana plugin metadata
-          path:grafana\.json$
-          EOF
-
-          echo "Created global exclusion patterns:"
-          cat /tmp/trufflehog-exclude.txt
-
       - name: Scan for secrets
         id: scan
         run: |
           set +e
           echo "[]" > results.json
+
+          # Classify paths vs /tmp/trufflehog-exclude.txt (Python re ~ TruffleHog Go regexp for our patterns).
+          cat > /tmp/trufflehog_exclude_helpers.py <<'ENDHELPER'
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          MANIFEST = frozenset({
+              "go.sum", "go.mod", "package.json", "package-lock.json", "pnpm-lock.yaml",
+              "yarn.lock", "poetry.lock", "Pipfile.lock", "uv.lock", "Cargo.lock",
+              "Gemfile.lock", "grafana.json",
+          })
+
+          _PATS = None
+
+          def load_patterns():
+              global _PATS
+              if _PATS is not None:
+                  return _PATS
+              pats = []
+              p = Path("/tmp/trufflehog-exclude.txt")
+              if not p.is_file():
+                  _PATS = pats
+                  return pats
+              for line in p.read_text().splitlines():
+                  line = line.strip()
+                  if not line or line.startswith("#"):
+                      continue
+                  try:
+                      pats.append(re.compile(line))
+                  except re.error:
+                      print(f"::warning::Invalid regex in exclude file (ignored for skip log): {line!r}", file=sys.stderr)
+              _PATS = pats
+              return pats
+
+          def vendor_skip(path: str) -> bool:
+              return (
+                  path.startswith("vendor/")
+                  or path.startswith("./vendor/")
+                  or "/vendor/" in path
+              )
+
+          def manifest_skip(path: str) -> bool:
+              return Path(path).name in MANIFEST
+
+          def exclude_match(path: str):
+              for r in load_patterns():
+                  if r.search(path):
+                      return r.pattern
+              return None
+
+          def main():
+              cmd = sys.argv[1]
+              if cmd == "match":
+                  path = sys.argv[2]
+                  m = exclude_match(path)
+                  if m:
+                      print(m)
+                      sys.exit(0)
+                  sys.exit(1)
+              if cmd == "report-pr":
+                  cfp = Path("changed-files.txt")
+                  lines = [ln.strip() for ln in cfp.read_text().splitlines() if ln.strip()] if cfp.is_file() else []
+                  sk_v, sk_m, sk_e, scan = [], [], [], []
+                  for f in lines:
+                      if vendor_skip(f):
+                          sk_v.append(f)
+                      elif manifest_skip(f):
+                          sk_m.append(f)
+                      else:
+                          pat = exclude_match(f)
+                          if pat:
+                              sk_e.append((f, pat))
+                          else:
+                              scan.append(f)
+                  def block(title, items, detail=False):
+                      print(f"{title} ({len(items)}):")
+                      for x in items[:500]:
+                          if detail:
+                              print(f"  - {x[0]}  (regex: {x[1]})")
+                          else:
+                              print(f"  - {x}")
+                      if len(items) > 500:
+                          print(f"  ... and {len(items) - 500} more")
+
+                  print("")
+                  print("=== TruffleHog exclusion report (PR changed files) ===")
+                  block("Skipped — Go vendor/", sk_v)
+                  block("Skipped — manifest / lock basename", sk_m)
+                  block("Skipped — exclude file regex", sk_e, detail=True)
+                  block("Will run TruffleHog on", scan)
+                  print("=== End exclusion report ===")
+                  print("")
+                  return
+              if cmd == "report-push":
+                  r = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=False)
+                  paths = [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
+                  matched = [(p, exclude_match(p)) for p in paths if exclude_match(p)]
+                  print("")
+                  print(f"=== Sample: tracked paths matching exclude regexes ({len(matched)} total, show first 200) ===")
+                  for p, pat in matched[:200]:
+                      print(f"  - {p}  (regex: {pat})")
+                  if len(matched) > 200:
+                      print(f"  ... and {len(matched) - 200} more")
+                  print("(Untracked files can also match; TruffleHog still applies excludes on full scan.)")
+                  print("=== End exclude sample ===")
+                  print("")
+                  return
+              print("unknown command", cmd, file=sys.stderr)
+              sys.exit(1)
+
+          if __name__ == "__main__":
+              main()
+          ENDHELPER
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             # PR: Scan only changed files (using two-dot diff with explicit base SHA)
@@ -103,7 +257,13 @@ jobs:
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed-files.txt
 
             if [[ -s changed-files.txt ]]; then
+              python3 /tmp/trufflehog_exclude_helpers.py report-pr
               while IFS= read -r file; do
+                if [[ "$file" == vendor/* || "$file" == */vendor/* || "$file" == ./vendor/* ]]; then
+                  echo "Skipping: ${file} (Go vendor directory)"
+                  continue
+                fi
+
                 # Get just the filename
                 filename=$(basename "$file")
 
@@ -114,6 +274,11 @@ jobs:
                     continue
                     ;;
                 esac
+
+                if pat=$(python3 /tmp/trufflehog_exclude_helpers.py match "$file" 2>/dev/null); then
+                  echo "Skipping: ${file} (exclude file regex: ${pat})"
+                  continue
+                fi
 
                 if [[ -f "${file}" ]]; then
                   echo "Scanning: ${file}"
@@ -126,6 +291,7 @@ jobs:
           else
             # Push to main: Scan current filesystem
             echo "Scanning current filesystem..."
+            python3 /tmp/trufflehog_exclude_helpers.py report-push
             trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
           fi
 
@@ -141,8 +307,12 @@ jobs:
                 # Filter out CHANGELOG git hashes if we have results
                 if jq -e 'length > 0' results.json >/dev/null 2>&1; then
                   jq '[.[] | select(
-                    ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
-                    !(($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and (.Raw | test("^[0-9a-f]{7,40}$"; "i")))
+                    (
+                      (try .SourceMetadata.Data.Filesystem.file catch null) //
+                      (try .SourceMetadata.Data.Git.file catch null) //
+                      ""
+                    ) as $file |
+                    ((($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and (.Raw | test("^[0-9a-f]{7,40}$"; "i"))) | not)
                   )]' results.json > results.json.tmp && mv results.json.tmp results.json
                 fi
               else
@@ -212,9 +382,9 @@ jobs:
               "- " +
               (if .Verified then "**VERIFIED SECRET**" else "**Possible secret**" end) +
               " (" + .DetectorName + ") at `" +
-              ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") +
+              (((try .SourceMetadata.Data.Filesystem.file catch null) // (try .SourceMetadata.Data.Git.file catch null)) // "unknown") +
               ":" +
-              ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) +
+              (((try .SourceMetadata.Data.Filesystem.line catch null) // (try .SourceMetadata.Data.Git.line catch null)) | tostring) +
               "` → `" +
               (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end) +
               "`"' results.json 2>/dev/null || echo "- Error processing results")
@@ -277,7 +447,7 @@ jobs:
             echo ""
             echo "Detailed Results:"
             if [[ -f "results.json" && -s "results.json" ]] && jq empty results.json 2>/dev/null; then
-              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") + ":" + ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' results.json 2>/dev/null || echo "Error processing results"
+              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + (((try .SourceMetadata.Data.Filesystem.file catch null) // (try .SourceMetadata.Data.Git.file catch null)) // "unknown") + ":" + (((try .SourceMetadata.Data.Filesystem.line catch null) // (try .SourceMetadata.Data.Git.line catch null)) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' results.json 2>/dev/null || echo "Error processing results"
             else
               echo "No secrets detected"
             fi

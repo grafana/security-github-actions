@@ -1,0 +1,25 @@
+# Built from prefixes.txt + this script (CI does this on every run).
+# Optional local copy: ./trufflehog/update-excludes.sh > trufflehog/global-exclude.txt
+#
+# --- directory prefixes (from prefixes.txt) ---
+# prefix: content/grafana/dashboards
+(^|\./|[/\\])content/grafana/dashboards([/\\]|$)
+
+# --- static path patterns ---
+# Lock files and checksums (contain hashes, not secrets)
+path:go\.sum$
+path:go\.mod$
+
+# Dependency manifests (contain URLs that trigger false positives)
+path:package\.json$
+path:package-lock\.json$
+path:pnpm-lock\.yaml$
+path:yarn\.lock$
+path:poetry\.lock$
+path:Pipfile\.lock$
+path:uv\.lock$
+path:Cargo\.lock$
+path:Gemfile\.lock$
+
+# Grafana plugin metadata
+path:grafana\.json$

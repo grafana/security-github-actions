@@ -1,0 +1,9 @@
+# TruffleHog path exclusions (one repo-relative path per line, use /).
+#
+# Edit this file and merge to security-github-actions main — nothing else required.
+# CI builds the real exclude list from this file + trufflehog/build_exclude_file.py.
+#
+# Optional: run ./trufflehog/update-excludes.sh to refresh trufflehog/global-exclude.txt
+# (human-readable copy only; workflows do not depend on it).
+
+content/grafana/dashboards
