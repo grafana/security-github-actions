@@ -1,4 +1,5 @@
-# Generated — do not edit by hand. Edit trufflehog/prefixes.txt then run ./trufflehog/update-excludes.sh
+# Built from prefixes.txt + this script (CI does this on every run).
+# Optional local copy: ./trufflehog/update-excludes.sh > trufflehog/global-exclude.txt
 #
 # --- directory prefixes (from prefixes.txt) ---
 # prefix: content/grafana/dashboards

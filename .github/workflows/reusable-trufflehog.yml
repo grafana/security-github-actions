@@ -57,33 +57,34 @@ jobs:
           DEST=/tmp/trufflehog-exclude.txt
           REPO=grafana/security-github-actions
           REF=main
-          # Exclusions: edit trufflehog/prefixes.txt, run ./trufflehog/update-excludes.sh, commit prefixes + global-exclude.txt
+          # Source of truth: trufflehog/prefixes.txt (+ static rules in build_exclude_file.py). CI builds the exclude file at runtime.
           RAW_BASE="https://raw.githubusercontent.com/grafana/security-github-actions/${REF}/trufflehog"
           RAW_URL="${RAW_BASE}/global-exclude.txt"
           RAW_BUILD="${RAW_BASE}/build_exclude_file.py"
           RAW_PREFIXES="${RAW_BASE}/prefixes.txt"
-          if gh api "repos/${REPO}/contents/trufflehog/global-exclude.txt?ref=${REF}" \
-              -H "Accept: application/vnd.github.v3.raw" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
-            echo "Loaded exclude patterns from ${REPO}@${REF} (GitHub API)"
-          elif curl -fsSL "${RAW_URL}" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
-            echo "Loaded exclude patterns from raw.githubusercontent.com (${REF})"
-          elif gh api "repos/${REPO}/contents/trufflehog/build_exclude_file.py?ref=${REF}" \
+          if gh api "repos/${REPO}/contents/trufflehog/build_exclude_file.py?ref=${REF}" \
               -H "Accept: application/vnd.github.v3.raw" -o /tmp/trufflehog_build_exclude_file.py 2>/dev/null \
             && gh api "repos/${REPO}/contents/trufflehog/prefixes.txt?ref=${REF}" \
               -H "Accept: application/vnd.github.v3.raw" -o /tmp/trufflehog_prefixes.txt 2>/dev/null \
             && python3 /tmp/trufflehog_build_exclude_file.py /tmp/trufflehog_prefixes.txt > "${DEST}" 2>/dev/null \
             && [[ -s "${DEST}" ]]; then
-            echo "Built exclude file from build_exclude_file.py + prefixes.txt (${REPO}@${REF}, GitHub API)"
+            echo "Built exclude file from prefixes.txt + build_exclude_file.py (${REPO}@${REF}, GitHub API)"
           elif curl -fsSL "${RAW_BUILD}" -o /tmp/trufflehog_build_exclude_file.py 2>/dev/null \
             && curl -fsSL "${RAW_PREFIXES}" -o /tmp/trufflehog_prefixes.txt 2>/dev/null \
             && python3 /tmp/trufflehog_build_exclude_file.py /tmp/trufflehog_prefixes.txt > "${DEST}" 2>/dev/null \
             && [[ -s "${DEST}" ]]; then
-            echo "Built exclude file from build_exclude_file.py + prefixes.txt (raw GitHub)"
+            echo "Built exclude file from prefixes.txt + build_exclude_file.py (raw GitHub)"
+          elif gh api "repos/${REPO}/contents/trufflehog/global-exclude.txt?ref=${REF}" \
+              -H "Accept: application/vnd.github.v3.raw" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+            echo "Loaded pre-built global-exclude.txt from ${REPO}@${REF} (GitHub API)"
+          elif curl -fsSL "${RAW_URL}" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+            echo "Loaded pre-built global-exclude.txt from raw.githubusercontent.com (${REF})"
           else
             echo "::warning::Could not fetch or rebuild TruffleHog excludes from ${REPO}@${REF}. Using last-resort bundled file — merge to main or fix token access."
             # Last resort only: must match stdout of python3 trufflehog/build_exclude_file.py (same commit).
             cat > "${DEST}" <<'EOF'
-          # Generated — do not edit by hand. Edit trufflehog/prefixes.txt then run ./trufflehog/update-excludes.sh
+          # Built from prefixes.txt + this script (CI does this on every run).
+          # Optional local copy: ./trufflehog/update-excludes.sh > trufflehog/global-exclude.txt
           #
           # --- directory prefixes (from prefixes.txt) ---
           # prefix: content/grafana/dashboards

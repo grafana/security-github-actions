@@ -1,12 +1,9 @@
-# How to add an exclusion (no regex — one repo-relative path per line; directory or file):
+# TruffleHog path exclusions (one repo-relative path per line, use /).
 #
-#   1. Add a line below (repo-relative path, use /), e.g.  docs/imported
-#   2. From the repo root, run:  ./trufflehog/update-excludes.sh
-#   3. Commit and push BOTH:
-#        trufflehog/prefixes.txt
-#        trufflehog/global-exclude.txt
-#   4. Merge to main — consumer repos pick it up automatically.
+# Edit this file and merge to security-github-actions main — nothing else required.
+# CI builds the real exclude list from this file + trufflehog/build_exclude_file.py.
 #
-# Lockfiles (go.sum, package.json, …) are listed in trufflehog/build_exclude_file.py if you need to change those.
+# Optional: run ./trufflehog/update-excludes.sh to refresh trufflehog/global-exclude.txt
+# (human-readable copy only; workflows do not depend on it).
 
 content/grafana/dashboards

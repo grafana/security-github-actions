@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build TruffleHog exclude file. Prefer: ./trufflehog/update-excludes.sh from repo root."""
+"""Build TruffleHog exclude file for CI. Run from repo root: ./trufflehog/update-excludes.sh (optional, refreshes global-exclude.txt)."""
 
 from __future__ import annotations
 
@@ -44,8 +44,8 @@ def main() -> None:
 
     lines: list[str] = []
     lines.append(
-        "# Generated — do not edit by hand. Edit trufflehog/prefixes.txt then run ./trufflehog/update-excludes.sh\n"
-        "#\n"
+        "# Built from prefixes.txt + this script (CI does this on every run).\n"
+        "# Optional local copy: ./trufflehog/update-excludes.sh > trufflehog/global-exclude.txt\n#\n"
     )
 
     lines.append("# --- directory prefixes (from prefixes.txt) ---\n")
