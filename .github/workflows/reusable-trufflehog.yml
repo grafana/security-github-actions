@@ -86,6 +86,8 @@ jobs:
           path:Gemfile\.lock$
           # Grafana plugin metadata
           path:grafana\.json$
+          # Go Vendor directory (takes forever and contains many false positives)
+          path:^vendor/
           EOF
 
           echo "Created global exclusion patterns:"
