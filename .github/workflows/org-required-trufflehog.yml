@@ -21,8 +21,7 @@ permissions:
 jobs:
   secret-scan:
     name: TruffleHog Secret Scan
-    # Pin to this branch so ruleset-required runs use the PR workflow; restore @main after merge.
-    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@fix/trufflehog-merge-group-diff-scan
+    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@main
     with:
       # Fail on verified secrets - blocking mode
       fail-on-verified: "true"      # Block on verified secrets
