@@ -43,13 +43,9 @@ jobs:
           fetch-depth: 1
           persist-credentials: true
 
-      - name: Fetch base and head commits (pull_request)
+      - name: Fetch base and head commits
         if: github.event_name == 'pull_request'
         run: git fetch --depth=1 origin ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
-
-      - name: Fetch base and head commits (merge_group)
-        if: github.event_name == 'merge_group'
-        run: git fetch --depth=1 origin ${{ github.event.merge_group.base_sha }} ${{ github.event.merge_group.head_sha }}
 
       - name: Remove persisted credentials
         run: git config --unset-all http.https://github.com/.extraheader
@@ -101,15 +97,10 @@ jobs:
           set +e
           echo "[]" > results.json
 
-          if [[ "${{ github.event_name }}" == "pull_request" ]] || [[ "${{ github.event_name }}" == "merge_group" ]]; then
-            # PR / merge queue: scan only paths that differ from base..head (not the entire checkout)
-            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              echo "Scanning changed files in PR..."
-              git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed-files.txt
-            else
-              echo "Scanning changed files in merge group..."
-              git diff --name-only ${{ github.event.merge_group.base_sha }} ${{ github.event.merge_group.head_sha }} > changed-files.txt
-            fi
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # PR: Scan only changed files (using two-dot diff with explicit base SHA)
+            echo "Scanning changed files in PR..."
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed-files.txt
 
             if [[ -s changed-files.txt ]]; then
               while IFS= read -r file; do
@@ -133,7 +124,7 @@ jobs:
               echo "No files changed"
             fi
           else
-            # push to main (and any other events): full filesystem scan
+            # Push to main: Scan current filesystem
             echo "Scanning current filesystem..."
             trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
           fi
