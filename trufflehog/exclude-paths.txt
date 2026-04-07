@@ -1,0 +1,31 @@
+# TruffleHog path exclusions — one Go regex per line.
+# Edit this file and merge to main. CI fetches it at runtime and passes
+# it directly to `trufflehog --exclude-paths`.
+#
+# Syntax: Go regexp (https://pkg.go.dev/regexp/syntax).
+# A file is excluded when ANY pattern matches its path.
+# Lines starting with # and blank lines are ignored.
+
+# Go vendor directory (third-party code, not repo secrets)
+vendor/
+
+# Lock files and checksums (contain hashes, not secrets)
+go\.sum$
+go\.mod$
+
+# Dependency manifests (contain URLs / hashes that trigger false positives)
+package\.json$
+package-lock\.json$
+pnpm-lock\.yaml$
+yarn\.lock$
+poetry\.lock$
+Pipfile\.lock$
+uv\.lock$
+Cargo\.lock$
+Gemfile\.lock$
+
+# Grafana plugin metadata
+grafana\.json$
+
+# Grafana dashboards (user-supplied site content, full of base64/hashes)
+content/grafana/dashboards
