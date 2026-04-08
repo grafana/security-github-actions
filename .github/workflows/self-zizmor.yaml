@@ -45,7 +45,7 @@ jobs:
       - zizmor-check
     if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@4d8d8be02d0d59b047dcb2f36e1b153b4c69600a
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@e7a3275d4c4978a3514801ec55708f1c599a6906
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: high
