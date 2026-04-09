@@ -30,7 +30,7 @@ permissions:
 
 env:
   # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
-  TRUFFLEHOG_VERSION: 3.89.2
+  TRUFFLEHOG_VERSION: v3.94.0
 
 jobs:
   trufflehog-scan:
@@ -43,77 +43,115 @@ jobs:
           fetch-depth: 1
           persist-credentials: true
 
-      - name: Fetch base and head commits
+      - name: Fetch base and head commits (pull_request)
         if: github.event_name == 'pull_request'
-        run: git fetch --depth=1 origin ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git fetch --depth=1 origin "${PR_BASE_SHA}" "${PR_HEAD_SHA}"
+
+      - name: Fetch base and head commits (merge_group)
+        if: github.event_name == 'merge_group'
+        env:
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: git fetch --depth=1 origin "${MERGE_GROUP_BASE_SHA}" "${MERGE_GROUP_HEAD_SHA}"
 
       - name: Remove persisted credentials
         run: git config --unset-all http.https://github.com/.extraheader
 
+      - name: Fetch org-wide TruffleHog exclude patterns
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          DEST=/tmp/trufflehog-exclude.txt
+          REPO=grafana/security-github-actions
+          FILE_PATH=trufflehog/exclude-paths.txt
+
+          # Resolve the ref the calling workflow used (e.g. @main, @feature/branch, @v1).
+          CALLER_REF="main"
+          if [[ -n "${WORKFLOW_REF}" ]]; then
+            CALLER_REF=$(echo "${WORKFLOW_REF}" | sed 's|.*@||; s|^refs/heads/||; s|^refs/tags/||')
+          fi
+
+          LOADED=false
+          for REF in main "${CALLER_REF}"; do
+            [[ "$LOADED" == "true" ]] && break
+            if gh api "repos/${REPO}/contents/${FILE_PATH}?ref=${REF}" \
+                -H "Accept: application/vnd.github.v3.raw" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+              echo "Loaded exclude patterns from ${REPO}@${REF} (GitHub API)"
+              LOADED=true
+            elif curl -fsSL "https://raw.githubusercontent.com/${REPO}/${REF}/${FILE_PATH}" \
+                -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+              echo "Loaded exclude patterns from raw.githubusercontent.com@${REF}"
+              LOADED=true
+            fi
+          done
+
+          if [[ "$LOADED" != "true" ]]; then
+            echo "::warning::Could not fetch TruffleHog exclude patterns from ${REPO} (tried main and ${CALLER_REF}). Scanning without exclusions."
+            touch "${DEST}"
+          fi
+
+          # Append repo-local .trufflehogignore if present (same Go regex format).
+          if [[ -f ".trufflehogignore" ]]; then
+            echo "" >> "${DEST}"
+            echo "# Repo-local .trufflehogignore" >> "${DEST}"
+            cat .trufflehogignore >> "${DEST}"
+            echo "Appended repo-local .trufflehogignore"
+          fi
+
+          echo "--- effective exclude patterns ---"
+          cat "${DEST}"
+
       - name: Install TruffleHog
         run: |
           # Download binary directly from GitHub releases for supply chain security
-          VERSION="v${{ env.TRUFFLEHOG_VERSION }}"
+          echo "Using Trufflehog version: $TRUFFLEHOG_VERSION"
           # Auto-detect architecture for cross-platform support
           if [[ "$(uname -m)" == "aarch64" ]]; then
             ARCH="linux_arm64"
           else
             ARCH="linux_amd64"
           fi
-          BINARY_URL="https://github.com/trufflesecurity/trufflehog/releases/download/${VERSION}/trufflehog_${VERSION#v}_${ARCH}.tar.gz"
+          BINARY_URL="https://github.com/trufflesecurity/trufflehog/releases/download/${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION#v}_${ARCH}.tar.gz"
 
           curl -sSfL "${BINARY_URL}" | tar -xz -C /tmp
           sudo mv /tmp/trufflehog /usr/local/bin/trufflehog
           sudo chmod +x /usr/local/bin/trufflehog
           trufflehog --version
 
-      - name: Create global exclusions
-        run: |
-          # Create centralized exclusion patterns for common false positives
-          cat > /tmp/trufflehog-exclude.txt <<'EOF'
-          # Lock files and checksums (contain hashes, not secrets)
-          path:go\.sum$
-          path:go\.mod$
-          # Dependency manifests (contain URLs that trigger false positives)
-          path:package\.json$
-          path:package-lock\.json$
-          path:pnpm-lock\.yaml$
-          path:yarn\.lock$
-          path:poetry\.lock$
-          path:Pipfile\.lock$
-          path:uv\.lock$
-          path:Cargo\.lock$
-          path:Gemfile\.lock$
-          # Grafana plugin metadata
-          path:grafana\.json$
-          EOF
-
-          echo "Created global exclusion patterns:"
-          cat /tmp/trufflehog-exclude.txt
-
       - name: Scan for secrets
         id: scan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
         run: |
           set +e
           echo "[]" > results.json
 
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # PR: Scan only changed files (using two-dot diff with explicit base SHA)
-            echo "Scanning changed files in PR..."
-            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed-files.txt
+          # Extract non-comment, non-blank patterns for the shell pre-filter.
+          grep -vE '^\s*#|^\s*$' /tmp/trufflehog-exclude.txt > /tmp/exclude-regexes.txt 2>/dev/null || true
+
+          if [[ "${EVENT_NAME}" == "pull_request" ]] || [[ "${EVENT_NAME}" == "merge_group" ]]; then
+            if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+              echo "Scanning changed files in PR..."
+              git diff --name-only "${PR_BASE_SHA}" "${PR_HEAD_SHA}" > changed-files.txt
+            else
+              echo "Scanning changed files in merge group..."
+              git diff --name-only "${MERGE_GROUP_BASE_SHA}" "${MERGE_GROUP_HEAD_SHA}" > changed-files.txt
+            fi
 
             if [[ -s changed-files.txt ]]; then
               while IFS= read -r file; do
-                # Get just the filename
-                filename=$(basename "$file")
-
-                # Skip excluded files (use case statement for cleaner matching)
-                case "$filename" in
-                  go.sum|go.mod|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|poetry.lock|Pipfile.lock|uv.lock|Cargo.lock|Gemfile.lock|grafana.json)
-                    echo "Skipping: ${file} (excluded manifest/lock file)"
-                    continue
-                    ;;
-                esac
+                if [[ -s /tmp/exclude-regexes.txt ]] && echo "$file" | grep -qEf /tmp/exclude-regexes.txt 2>/dev/null; then
+                  echo "Skipping: ${file} (matches exclude pattern)"
+                  continue
+                fi
 
                 if [[ -f "${file}" ]]; then
                   echo "Scanning: ${file}"
@@ -124,7 +162,6 @@ jobs:
               echo "No files changed"
             fi
           else
-            # Push to main: Scan current filesystem
             echo "Scanning current filesystem..."
             trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
           fi
@@ -141,8 +178,12 @@ jobs:
                 # Filter out CHANGELOG git hashes if we have results
                 if jq -e 'length > 0' results.json >/dev/null 2>&1; then
                   jq '[.[] | select(
-                    ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "") as $file |
-                    !(($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and (.Raw | test("^[0-9a-f]{7,40}$"; "i")))
+                    (
+                      (try .SourceMetadata.Data.Filesystem.file catch null) //
+                      (try .SourceMetadata.Data.Git.file catch null) //
+                      ""
+                    ) as $file |
+                    ((($file | test("CHANGELOG|HISTORY\\.md|NEWS\\.md"; "i")) and (.Raw | test("^[0-9a-f]{7,40}$"; "i"))) | not)
                   )]' results.json > results.json.tmp && mv results.json.tmp results.json
                 fi
               else
@@ -176,26 +217,29 @@ jobs:
 
       - name: Delete resolved comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total == '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # Find and delete TruffleHog comment if secrets have been resolved
-          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | select(.body | contains("<!-- trufflehog-secret-scan-comment -->")) | .id' | head -1 || echo "")
+          COMMENT_ID=$(gh api "repos/${GH_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq '.[] | select(.body | contains("<!-- trufflehog-secret-scan-comment -->")) | .id' | head -1 || echo "")
 
           if [[ -n "$COMMENT_ID" ]]; then
             echo "Secrets resolved - deleting previous warning comment (ID: ${COMMENT_ID})"
-            gh api -X DELETE /repos/${{ github.repository }}/issues/comments/${COMMENT_ID}
+            gh api -X DELETE "/repos/${GH_REPOSITORY}/issues/comments/${COMMENT_ID}"
             echo "Comment deleted successfully"
           else
             echo "No existing TruffleHog comment to delete"
           fi
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Generate PR comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.scan.outputs.total > 0 }}
         id: comment-body
+        env:
+          VERIFIED: ${{ steps.scan.outputs.verified }}
+          UNVERIFIED: ${{ steps.scan.outputs.unverified }}
         run: |
-          VERIFIED=${{ steps.scan.outputs.verified }}
-          UNVERIFIED=${{ steps.scan.outputs.unverified }}
           TOTAL=$((VERIFIED+UNVERIFIED))
 
           if [[ $TOTAL -eq 0 ]]; then
@@ -212,9 +256,9 @@ jobs:
               "- " +
               (if .Verified then "**VERIFIED SECRET**" else "**Possible secret**" end) +
               " (" + .DetectorName + ") at `" +
-              ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") +
+              (((try .SourceMetadata.Data.Filesystem.file catch null) // (try .SourceMetadata.Data.Git.file catch null)) // "unknown") +
               ":" +
-              ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) +
+              (((try .SourceMetadata.Data.Filesystem.line catch null) // (try .SourceMetadata.Data.Git.line catch null)) | tostring) +
               "` → `" +
               (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end) +
               "`"' results.json 2>/dev/null || echo "- Error processing results")
@@ -261,23 +305,28 @@ jobs:
       - name: Create scan report
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+          TOTAL_SECRETS: ${{ steps.scan.outputs.total }}
+          VERIFIED_SECRETS: ${{ steps.scan.outputs.verified }}
+          UNVERIFIED_SECRETS: ${{ steps.scan.outputs.unverified }}
         run: |
           {
             echo "TruffleHog Scan Report"
             echo "====================="
             echo "Date: $(date)"
-            echo "Repository: ${{ github.repository }}"
+            echo "Repository: ${GH_REPOSITORY}"
             echo "Branch: ${GITHUB_REF_NAME}"
-            echo "Commit: ${{ github.sha }}"
+            echo "Commit: ${GH_SHA}"
             echo ""
             echo "Summary:"
-            echo "- Total secrets: ${{ steps.scan.outputs.total }}"
-            echo "- Verified: ${{ steps.scan.outputs.verified }}"
-            echo "- Unverified: ${{ steps.scan.outputs.unverified }}"
+            echo "- Total secrets: ${TOTAL_SECRETS}"
+            echo "- Verified: ${VERIFIED_SECRETS}"
+            echo "- Unverified: ${UNVERIFIED_SECRETS}"
             echo ""
             echo "Detailed Results:"
             if [[ -f "results.json" && -s "results.json" ]] && jq empty results.json 2>/dev/null; then
-              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + ((.SourceMetadata?.Data?.Filesystem?.file // .SourceMetadata?.Data?.Git?.file) // "unknown") + ":" + ((.SourceMetadata?.Data?.Filesystem?.line // .SourceMetadata?.Data?.Git?.line) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' results.json 2>/dev/null || echo "Error processing results"
+              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + (((try .SourceMetadata.Data.Filesystem.file catch null) // (try .SourceMetadata.Data.Git.file catch null)) // "unknown") + ":" + (((try .SourceMetadata.Data.Filesystem.line catch null) // (try .SourceMetadata.Data.Git.line catch null)) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' results.json 2>/dev/null || echo "Error processing results"
             else
               echo "No secrets detected"
             fi
