@@ -32,7 +32,7 @@ jobs:
           GITHUB_BRANCH: ${{github.head_ref || github.ref_name}}
         run: |
           set +e
-          semgrep scan --error --json --config security-github-actions/semgrep/custom-rules.yaml > /tmp/semgrep-results.json 2>/dev/null
+          semgrep scan --error --json --config security-github-actions/semgrep/custom-rules.yaml > /tmp/semgrep-results.json
           EXIT_CODE=$?
           set -e
           if [ $EXIT_CODE -eq 1 ]; then
