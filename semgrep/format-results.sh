@@ -17,12 +17,12 @@ echo ""
 echo "| Severity | Rule | File | Message |"
 echo "|----------|------|------|---------|"
 
-jq -r --arg repo "$GITHUB_REPOSITORY" --arg branch "$GITHUB_BRANCH" '.results[] | {
+jq -r --arg repo "$GITHUB_REPOSITORY" --arg sha "$GITHUB_SHA" '.results[] | {
   sev: .extra.severity,
   rule: (.check_id | split(".")[-1]),
   path: .path,
   line: .start.line,
-  msg: (.extra.message | gsub("\n"; " ") | ltrimstr(" ") | rtrimstr(" "))
+  msg: (.extra.message | gsub("\n"; " ") | ltrimstr(" ") | rtrimstr(" ") | gsub("\\|"; "\\|") | gsub("`"; "\\`"))
 } | {
   icon: (if .sev == "CRITICAL" then "🔴"
          elif .sev == "HIGH" then "🟠"
@@ -35,4 +35,4 @@ jq -r --arg repo "$GITHUB_REPOSITORY" --arg branch "$GITHUB_BRANCH" '.results[] 
   path: .path,
   line: .line,
   msg: .msg
-} | "| \(.icon) \(.sev) | `\(.rule)` | [`\(.path):\(.line)`](https://github.com/\($repo)/blob/\($branch)/\(.path)#L\(.line)) | \(.msg) |"' "$INPUT_FILE"
+} | "| \(.icon) \(.sev) | `\(.rule)` | [`\(.path):\(.line)`](https://github.com/\($repo)/blob/\($sha)/\(.path)#L\(.line)) | \(.msg) |"' "$INPUT_FILE"
