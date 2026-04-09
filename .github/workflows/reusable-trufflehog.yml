@@ -332,6 +332,10 @@ jobs:
             fi
           } > trufflehog_scan.txt
 
+      - name: Copy exclude file into workspace for artifact upload
+        if: always()
+        run: cp /tmp/trufflehog-exclude.txt trufflehog-exclude.txt 2>/dev/null || true
+
       - name: Upload scan results
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         if: always()
@@ -340,6 +344,7 @@ jobs:
           path: |
             trufflehog_scan.txt
             results.json
+            trufflehog-exclude.txt
           if-no-files-found: warn
           retention-days: 2
 
@@ -396,17 +401,23 @@ jobs:
             echo "::error::PROMETHEUS_URL not set; Vault step may have failed."
             exit 1
           fi
-          if ! docker pull ghcr.io/grafana/grafana-bench:v1.0.4; then
+          if ! docker pull ghcr.io/grafana/grafana-bench:v1.0.8; then
             echo "Could not pull Bench image; skipping bench step."
             exit 0
           fi
+
+          EXCLUDE_FLAG=""
+          if [[ -f "trufflehog-exclude.txt" ]]; then
+            EXCLUDE_FLAG="--trufflehog-exclude-file /tests/trufflehog-exclude.txt"
+          fi
+
           docker run --rm \
             --network=host \
             --volume="${PWD}:/tests/" \
             -e PROMETHEUS_URL="${PROMETHEUS_URL}" \
             -e PROMETHEUS_USER="${PROMETHEUS_USER}" \
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
-            ghcr.io/grafana/grafana-bench:v1.0.4 report \
+            ghcr.io/grafana/grafana-bench:v1.0.8 report \
             --report-input trufflehog \
             --service "${BENCH_SERVICE}" \
             --service-version "${BENCH_SERVICE_VERSION}" \
@@ -415,4 +426,5 @@ jobs:
             --report-output log \
             --log-level debug \
             --prometheus-metrics \
+            ${EXCLUDE_FLAG} \
             /tests/results.json
