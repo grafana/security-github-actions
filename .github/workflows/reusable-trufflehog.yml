@@ -401,7 +401,7 @@ jobs:
             echo "::error::PROMETHEUS_URL not set; Vault step may have failed."
             exit 1
           fi
-          if ! docker pull ghcr.io/grafana/grafana-bench:v1.0.8; then
+          if ! docker pull ghcr.io/grafana/grafana-bench:v1.0.9; then
             echo "Could not pull Bench image; skipping bench step."
             exit 0
           fi
@@ -417,7 +417,7 @@ jobs:
             -e PROMETHEUS_URL="${PROMETHEUS_URL}" \
             -e PROMETHEUS_USER="${PROMETHEUS_USER}" \
             -e PROMETHEUS_PASSWORD="${PROMETHEUS_PASSWORD}" \
-            ghcr.io/grafana/grafana-bench:v1.0.8 report \
+            ghcr.io/grafana/grafana-bench:v1.0.9 report \
             --report-input trufflehog \
             --service "${BENCH_SERVICE}" \
             --service-version "${BENCH_SERVICE_VERSION}" \
