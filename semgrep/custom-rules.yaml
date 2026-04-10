@@ -1,0 +1,13 @@
+rules:
+  - id: deny-actions-create-github-app-token
+    patterns:
+      - pattern-regex: "uses:\\s*actions/create-github-app-token"
+    paths:
+      include:
+        - "*.yaml"
+        - "*.yml"
+    message: >
+      Do not use actions/create-github-app-token. Use the organization's
+      approved [alternative for generating GitHub App tokens](https://enghub.grafana-ops.net/docs/default/component/deployment-tools/platform/vault/github-app-token-broker-migration-guide/).
+    languages: [generic]
+    severity: LOW
