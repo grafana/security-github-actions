@@ -147,17 +147,33 @@ jobs:
             fi
 
             if [[ -s changed-files.txt ]]; then
+              # One TruffleHog process for all changed paths (same flags as non-PR scan). The
+              # previous per-file loop paid full startup cost for every path, which dominated
+              # runtime on large PRs. Paths are still filtered for excludes and missing files
+              # (e.g. deletions in the diff).
+              paths=()
               while IFS= read -r file; do
                 if [[ -s /tmp/exclude-regexes.txt ]] && echo "$file" | grep -qEf /tmp/exclude-regexes.txt 2>/dev/null; then
                   echo "Skipping: ${file} (matches exclude pattern)"
                   continue
                 fi
-
                 if [[ -f "${file}" ]]; then
-                  echo "Scanning: ${file}"
-                  trufflehog filesystem "${file}" --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified >> results.ndjson || true
+                  paths+=("${file}")
                 fi
               done < changed-files.txt
+
+              if ((${#paths[@]} > 0)); then
+                echo "Running TruffleHog on ${#paths[@]} changed file(s) in a single invocation..."
+                trufflehog filesystem \
+                  --exclude-paths /tmp/trufflehog-exclude.txt \
+                  --concurrency 16 \
+                  --json \
+                  --no-update \
+                  --results=verified,unverified \
+                  "${paths[@]}" > results.ndjson || true
+              else
+                echo "No files to scan after excludes (only deletions or excluded paths)"
+              fi
             else
               echo "No files changed"
             fi
@@ -379,7 +395,7 @@ jobs:
       id-token: write
     steps:
       - name: Get Prometheus secrets from Vault
-        uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@078c4a8af09e06d646077550f9e0f68171d5881e # get-vault-secrets/v1.3.1
         with:
           common_secrets: |
             PROMETHEUS_URL=grafana-bench:prometheus_url
