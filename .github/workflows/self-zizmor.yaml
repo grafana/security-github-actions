@@ -49,7 +49,7 @@ jobs:
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: high
-      min-severity: high
+      min-severity: medium
       min-confidence: low
       extra-args: --offline
       # Reusable workflow gates bench job on org + non-fork PR (OIDC/Vault not available on fork PRs); pass true to opt in.
