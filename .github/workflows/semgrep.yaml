@@ -1,0 +1,68 @@
+name: Semgrep static analysis
+on:
+  pull_request:
+jobs:
+  semgrep:
+    permissions:
+      contents: read
+      pull-requests: write
+    # User definable name of this GitHub Actions job.
+    name: semgrep-oss/scan
+    # If you are self-hosting, change the following `runs-on` value:
+    runs-on: ubuntu-latest
+    container:
+      # A Docker image with Semgrep installed. Do not change this.
+      image: semgrep/semgrep:1.152.0
+    steps:
+      # Fetch project source with GitHub Actions Checkout.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Fetch org-wide custom Semgrep rules from the central repository.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: grafana/security-github-actions
+          ref: ${{ github.repository == 'grafana/security-github-actions' && (github.head_ref || github.ref_name) || '' }}
+          sparse-checkout: |
+            semgrep/custom-rules.yaml
+            semgrep/format-results.sh
+          path: security-github-actions
+      - id: semgrep
+        env:
+          GITHUB_REPOSITORY: ${{github.repository}}
+          GITHUB_BRANCH: ${{github.head_ref || github.ref_name}}
+        run: |
+          set +e
+          semgrep scan --error --json --config security-github-actions/semgrep/custom-rules.yaml > /tmp/semgrep-results.json
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -eq 1 ]; then
+            echo "has_findings=true" >> "$GITHUB_OUTPUT"
+            {
+              echo 'SEMGREP_OUTPUT<<SEMGREP_EOF'
+              bash security-github-actions/semgrep/format-results.sh /tmp/semgrep-results.json
+              echo 'SEMGREP_EOF'
+            } >> "$GITHUB_ENV"
+          fi
+
+          if [ $EXIT_CODE -gt 1 ]; then
+            echo "::error::Semgrep run encounters an error"
+            cat /tmp/semgrep-results.json
+            exit 1
+          fi
+
+          HIGH_CRITICAL=$(jq '[.results[] | select(.extra.severity == "HIGH" or .extra.severity == "CRITICAL")] | length' /tmp/semgrep-results.json)
+          if [ "$HIGH_CRITICAL" -gt 0 ]; then
+            echo "has_high_critical=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.semgrep.outputs.has_findings == 'true'
+        uses: int128/comment-action@66317511bc86c47bd51e03059040e8a460a167b8
+        with:
+          update-if-exists: recreate
+          post: |
+            ${{ env.SEMGREP_OUTPUT }}
+
+      - if: steps.semgrep.outputs.has_high_critical == 'true'
+        run: |
+          echo "::error::Semgrep found HIGH or CRITICAL severity findings."
+          exit 1
