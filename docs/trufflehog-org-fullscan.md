@@ -23,3 +23,10 @@ With token: add `--token="$GITHUB_TOKEN"`.
 
 - Workflow is advisory (no `--fail`); do not add as a required ruleset check if you want it off the merge path.
 - Weekly schedule is optional; remove `schedule:` in the YAML for manual-only.
+
+## Input validation (workflow_dispatch)
+
+To avoid unsafe values being interpreted by the shell, inputs are restricted:
+
+- **org:** GitHub org slug only — letters, digits, hyphen; 1–39 characters (first character must be alphanumeric).
+- **single_repo:** Must look like `https://github.com/ORG/REPO` (no query string, fragment, or `.git` suffix in the URL you pass).
