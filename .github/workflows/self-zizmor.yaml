@@ -47,8 +47,8 @@ jobs:
 
     # Testing security-appsec#326: reusable with optional .github/zizmor-collection-ignore. Point org rulesets at
     # branch test/zizmor-vendor-excludes-326 to validate; replace with grafana/shared-workflows@<merge SHA> for main.
-    # Pin to fork branch (moves with pushes) for pre-merge testing; switch back to @<SHA> for reproducible runs.
-    uses: isaiah-grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@feat/zizmor-vendor-excludes-326
+    # Pinned to fork SHA (not a branch ref) to satisfy code scanning unpinned-reusable-workflow rules; bump when testing new commits.
+    uses: isaiah-grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@ca9579cb3a5b072b4f75af091380536c01131610
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       # Pilot branch: only fail on critical so high-severity zizmor findings do not block ruleset/PR testing (#326).
