@@ -1,0 +1,155 @@
+# Org-wide secret scan using TruffleHog's built-in GitHub source.
+# See: https://github.com/trufflesecurity/trufflehog — `trufflehog github --org=…`
+#
+# Test now: Actions → this workflow → Run workflow.
+# Smoke test: set `single_repo` to one HTTPS URL and leave org as default.
+#
+# Inputs are passed only via step `env` (not ${{ }} inside `run:`) to satisfy
+# zizmor template-injection rules; values are validated before use.
+
+name: TruffleHog org scan (GitHub)
+
+on:
+  workflow_dispatch:
+    inputs:
+      org:
+        description: "GitHub org slug (used when single_repo is empty)"
+        required: true
+        default: "grafana"
+        type: string
+      single_repo:
+        description: "Optional smoke test: one repo URL, e.g. https://github.com/grafana/grafana"
+        required: false
+        default: ""
+        type: string
+  schedule:
+    # Weekly; delete this block if you only want manual runs.
+    - cron: "15 4 * * 0"
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
+  TRUFFLEHOG_VERSION: v3.94.0
+  DEFAULT_ORG: grafana
+
+jobs:
+  scan:
+    name: Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Install TruffleHog
+        run: |
+          if [[ "$(uname -m)" == "aarch64" ]]; then
+            ARCH="linux_arm64"
+          else
+            ARCH="linux_amd64"
+          fi
+          BINARY_URL="https://github.com/trufflesecurity/trufflehog/releases/download/${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION#v}_${ARCH}.tar.gz"
+          curl -sSfL "${BINARY_URL}" | tar -xz -C /tmp
+          sudo mv /tmp/trufflehog /usr/local/bin/trufflehog
+          sudo chmod +x /usr/local/bin/trufflehog
+          trufflehog --version
+
+      - name: Run scan (advisory — never blocks merges)
+        env:
+          TOKEN: ${{ secrets.ORG_TRUFFLEHOG_PAT }}
+          # Do not interpolate workflow inputs inside `run:` (zizmor: template-injection).
+          ORG_INPUT: ${{ github.event.inputs.org || '' }}
+          SINGLE_REPO_INPUT: ${{ github.event.inputs.single_repo || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ -z "${TOKEN}" ]]; then
+            echo "::error::Create repository secret ORG_TRUFFLEHOG_PAT (PAT with read access to the org repos you scan)."
+            exit 1
+          fi
+
+          # GitHub org slug: alphanumeric + hyphen, reasonable length (GitHub max 39).
+          validate_org() {
+            local o="$1"
+            [[ "${o}" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$ ]]
+          }
+
+          # Single-repo smoke test: strict https://github.com/org/repo only.
+          validate_repo_url() {
+            local u="$1"
+            [[ -z "${u}" ]] && return 0
+            [[ "${u}" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$ ]]
+          }
+
+          ORG="${DEFAULT_ORG}"
+          SINGLE_REPO=""
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            if [[ -n "${ORG_INPUT}" ]]; then
+              if ! validate_org "${ORG_INPUT}"; then
+                echo "::error::Invalid org slug (allowed: letters, digits, hyphen; 1–39 chars)."
+                exit 1
+              fi
+              ORG="${ORG_INPUT}"
+            fi
+            if [[ -n "${SINGLE_REPO_INPUT}" ]]; then
+              if ! validate_repo_url "${SINGLE_REPO_INPUT}"; then
+                echo "::error::Invalid single_repo URL (use https://github.com/ORG/REPO with no query or fragment)."
+                exit 1
+              fi
+              SINGLE_REPO="${SINGLE_REPO_INPUT}"
+            fi
+          fi
+
+          set +e
+          if [[ -n "${SINGLE_REPO}" ]]; then
+            echo "Mode: single repo → ${SINGLE_REPO}"
+            trufflehog github \
+              --repo="${SINGLE_REPO}" \
+              --token="${TOKEN}" \
+              --json \
+              --no-update \
+              --results=verified,unverified \
+              > results.ndjson
+          else
+            echo "Mode: full org → ${ORG}"
+            trufflehog github \
+              --org="${ORG}" \
+              --token="${TOKEN}" \
+              --json \
+              --no-update \
+              --results=verified,unverified \
+              > results.ndjson
+          fi
+          TH_EXIT=$?
+          set -e
+
+          grep -E '^\{' results.ndjson > filtered.ndjson 2>/dev/null || true
+          if [[ -s filtered.ndjson ]]; then
+            jq -R 'fromjson?' filtered.ndjson | jq -s '.' > results.json
+          else
+            echo "[]" > results.json
+          fi
+
+          VERIFIED="$(jq '[.[] | select(.Verified == true)] | length' results.json)"
+          UNVERIFIED="$(jq '[.[] | select(.Verified == false)] | length' results.json)"
+          TOTAL=$((VERIFIED + UNVERIFIED))
+
+          {
+            echo "### TruffleHog (github source)"
+            echo "- TruffleHog exit: \`${TH_EXIT}\` (non-zero can mean findings or scan errors; artifacts still uploaded)"
+            echo "- Verified: \`${VERIFIED}\`"
+            echo "- Unverified: \`${UNVERIFIED}\`"
+            echo "- Total: \`${TOTAL}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          exit 0
+
+      - name: Upload results
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        if: always()
+        with:
+          name: trufflehog_github_${{ github.run_id }}
+          path: |
+            results.json
+            results.ndjson
+          if-no-files-found: warn
+          retention-days: 14
