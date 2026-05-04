@@ -397,6 +397,7 @@ jobs:
       id-token: write
     steps:
       - name: Get Prometheus secrets from Vault
+        continue-on-error: true
         uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
         with:
           common_secrets: |
@@ -405,11 +406,13 @@ jobs:
             PROMETHEUS_PASSWORD=grafana-bench:prometheus_token
 
       - name: Download TruffleHog scan artifact
+        continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: trufflehog_scan
 
       - name: Send TruffleHog metrics to Prometheus via Grafana Bench
+        continue-on-error: true
         env:
           BENCH_SERVICE: ${{ format('grafana-{0}', github.event.repository.name) }}
           BENCH_SUITE_NAME: ${{ github.event.repository.name }}/trufflehog
