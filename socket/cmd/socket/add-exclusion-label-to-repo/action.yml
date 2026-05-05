@@ -1,0 +1,30 @@
+name: Socket Add Exclusion Label to Repo
+description: Adds a Socket exclusion label to a repository to exempt it from license policy enforcement
+
+inputs:
+  socket_api_token:
+    description: Socket API authentication token
+    required: true
+  socket_org:
+    description: Socket organization slug
+    required: true
+    default: grafana
+  repository_name:
+    description: Name of the repository to add the exclusion label to
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: ${{ github.action_path }}/../../../go.mod
+    - name: Add exclusion label to repo
+      shell: bash
+      working-directory: ${{ github.action_path }}/../../../
+      run: go run ./cmd/socket/add-exclusion-label-to-repo --repo "$REPO_NAME"
+      env:
+        SOCKET_API_KEY: ${{ inputs.socket_api_token }}
+        SOCKET_ORG: ${{ inputs.socket_org }}
+        REPO_NAME: ${{ inputs.repository_name }}

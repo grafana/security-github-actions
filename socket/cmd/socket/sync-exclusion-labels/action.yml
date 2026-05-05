@@ -1,0 +1,40 @@
+name: Socket Sync Exclusion Labels
+description: Applies the Socket exclusion label to all GitHub repos in the org that have a designated GitHub topic
+
+inputs:
+  socket_api_token:
+    description: Socket API authentication token
+    required: true
+  socket_org:
+    description: Socket organization slug
+    required: true
+    default: grafana
+  github_token:
+    description: GitHub token for listing org repos
+    required: true
+  github_org:
+    description: GitHub organization to scan
+    required: false
+    default: grafana
+  github_topic:
+    description: GitHub topic that marks a repo for Socket license policy exclusion
+    required: false
+    default: socket-exclude
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: ${{ github.action_path }}/../../../go.mod
+    - name: Sync exclusion labels
+      shell: bash
+      working-directory: ${{ github.action_path }}/../../../
+      run: go run ./cmd/socket/sync-exclusion-labels
+      env:
+        SOCKET_API_KEY: ${{ inputs.socket_api_token }}
+        SOCKET_ORG: ${{ inputs.socket_org }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_ORG: ${{ inputs.github_org }}
+        GITHUB_TOPIC: ${{ inputs.github_topic }}
