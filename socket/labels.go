@@ -46,19 +46,33 @@ func (c *Client) GetLabelByName(ctx context.Context, name string) (Label, error)
 	return Label{}, fmt.Errorf("label %q not found in org", name)
 }
 
-// GetReposWithLabel returns all repos in the org that have the given label applied.
-// GET /orgs/{org}/repos/labels/{labelID}/repos
-func (c *Client) GetReposWithLabel(ctx context.Context, labelID string) ([]Repo, error) {
-	path := fmt.Sprintf("/orgs/%s/repos/labels/%s/repos", c.Org, labelID)
+type labelDetailsResponse struct {
+	NextPage *string        `json:"nextPage"`
+	Results  []labelDetails `json:"results"`
+}
+
+type labelDetails struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	RepositoryIDs []string `json:"repository_ids"`
+}
+
+// GetLabeledRepoIDs returns the Socket repository IDs of all repos that have the given label applied.
+// GET /orgs/{org}/repos/labels/{labelID}
+func (c *Client) GetLabeledRepoIDs(ctx context.Context, labelID string) ([]string, error) {
+	path := fmt.Sprintf("/orgs/%s/repos/labels/%s", c.Org, labelID)
 	data, err := c.makeAPIRequest(ctx, path)
 	if err != nil {
 		return nil, err
 	}
-	var repos []Repo
-	if err := json.Unmarshal(data, &repos); err != nil {
-		return nil, fmt.Errorf("parsing repos with label: %w", err)
+	var resp labelDetailsResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("parsing label details: %w", err)
 	}
-	return repos, nil
+	if len(resp.Results) == 0 {
+		return nil, fmt.Errorf("label %q not found", labelID)
+	}
+	return resp.Results[0].RepositoryIDs, nil
 }
 
 // AssociateLabelRequest is the request body for the associate label endpoint.

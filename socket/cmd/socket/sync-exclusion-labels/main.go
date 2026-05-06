@@ -40,28 +40,22 @@ func main() {
 	}
 	fmt.Printf("Found %d GitHub repos with topic %q\n", len(githubRepos), githubTopic)
 
-	// Fetch Socket repos that already have the exclusion label applied.
-	alreadyLabeled, err := socketClient.GetReposWithLabel(ctx, label.ID)
+	// Fetch the IDs of Socket repos that already have the exclusion label applied.
+	labeledIDs, err := socketClient.GetLabeledRepoIDs(ctx, label.ID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: fetching Socket repos with exclusion label: %v\n", err)
 		os.Exit(1)
 	}
-	labeledSet := make(map[string]bool, len(alreadyLabeled))
-	for _, r := range alreadyLabeled {
-		labeledSet[r.Name] = true
+	labeledIDSet := make(map[string]bool, len(labeledIDs))
+	for _, id := range labeledIDs {
+		labeledIDSet[id] = true
 	}
-	fmt.Printf("Found %d Socket repos already carrying the exclusion label\n", len(alreadyLabeled))
+	fmt.Printf("Found %d Socket repos already carrying the exclusion label\n", len(labeledIDs))
 
 	// Apply the label to any GitHub repo not yet covered in Socket.
 	var applied, skipped, notInSocket, failed int
 
 	for _, repoName := range githubRepos {
-		if labeledSet[repoName] {
-			fmt.Printf("  [skip] %s: exclusion label already applied\n", repoName)
-			skipped++
-			continue
-		}
-
 		repo, err := socketClient.GetRepo(ctx, repoName)
 		if err != nil {
 			if err.Error() == "not found" {
@@ -71,6 +65,12 @@ func main() {
 			}
 			fmt.Fprintf(os.Stderr, "  [error] %s: fetching from Socket: %v\n", repoName, err)
 			failed++
+			continue
+		}
+
+		if labeledIDSet[repo.ID] {
+			fmt.Printf("  [skip] %s: exclusion label already applied\n", repoName)
+			skipped++
 			continue
 		}
 

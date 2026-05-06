@@ -191,62 +191,86 @@ func TestAssociateLabel_Error(t *testing.T) {
 	}
 }
 
-// --------------- GetReposWithLabel ---------------
+// --------------- GetLabeledRepoIDs ---------------
 
-func TestGetReposWithLabel_ReturnsRepos(t *testing.T) {
-	labelID := "label-uuid-123"
-
+func TestGetLabeledRepoIDs_ReturnsIDs(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %s, want GET", r.Method)
 		}
-		wantPath := "/orgs/test-org/repos/labels/label-uuid-123/repos"
+		wantPath := "/orgs/test-org/repos/labels/label-uuid-123"
 		if r.URL.Path != wantPath {
 			t.Errorf("path = %s, want %s", r.URL.Path, wantPath)
 		}
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[
-			{"id":"repo-uuid-1","name":"repo-a"},
-			{"id":"repo-uuid-2","name":"repo-b"}
-		]`))
+		w.Write([]byte(`{
+			"nextPage": null,
+			"results": [{
+				"id": "label-uuid-123",
+				"name": "exclude-from-license-policy",
+				"repository_ids": ["repo-uuid-1", "repo-uuid-2"],
+				"has_security_policy": false,
+				"has_license_policy": true
+			}]
+		}`))
 	}))
 	defer srv.Close()
 
 	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
-	repos, err := c.GetReposWithLabel(context.Background(), labelID)
+	ids, err := c.GetLabeledRepoIDs(context.Background(), "label-uuid-123")
 	if err != nil {
-		t.Fatalf("GetReposWithLabel() error = %v", err)
+		t.Fatalf("GetLabeledRepoIDs() error = %v", err)
 	}
-	if len(repos) != 2 {
-		t.Fatalf("len(repos) = %d, want 2", len(repos))
+	if len(ids) != 2 {
+		t.Fatalf("len(ids) = %d, want 2", len(ids))
 	}
-	if repos[0].Name != "repo-a" {
-		t.Errorf("repos[0].Name = %q, want %q", repos[0].Name, "repo-a")
-	}
-	if repos[1].Name != "repo-b" {
-		t.Errorf("repos[1].Name = %q, want %q", repos[1].Name, "repo-b")
+	if ids[0] != "repo-uuid-1" || ids[1] != "repo-uuid-2" {
+		t.Errorf("ids = %v, want [repo-uuid-1 repo-uuid-2]", ids)
 	}
 }
 
-func TestGetReposWithLabel_ReturnsEmpty(t *testing.T) {
+func TestGetLabeledRepoIDs_EmptyRepositoryIDs(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[]`))
+		w.Write([]byte(`{
+			"nextPage": null,
+			"results": [{
+				"id": "label-uuid-123",
+				"name": "exclude-from-license-policy",
+				"repository_ids": [],
+				"has_security_policy": false,
+				"has_license_policy": true
+			}]
+		}`))
 	}))
 	defer srv.Close()
 
 	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
-	repos, err := c.GetReposWithLabel(context.Background(), "label-uuid-123")
+	ids, err := c.GetLabeledRepoIDs(context.Background(), "label-uuid-123")
 	if err != nil {
-		t.Fatalf("GetReposWithLabel() error = %v", err)
+		t.Fatalf("GetLabeledRepoIDs() error = %v", err)
 	}
-	if len(repos) != 0 {
-		t.Fatalf("len(repos) = %d, want 0", len(repos))
+	if len(ids) != 0 {
+		t.Fatalf("len(ids) = %d, want 0", len(ids))
 	}
 }
 
-func TestGetReposWithLabel_APIError(t *testing.T) {
+func TestGetLabeledRepoIDs_EmptyResults(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"nextPage": null, "results": []}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
+	_, err := c.GetLabeledRepoIDs(context.Background(), "label-uuid-123")
+	if err == nil {
+		t.Fatal("GetLabeledRepoIDs() expected error for empty results, got nil")
+	}
+}
+
+func TestGetLabeledRepoIDs_APIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(`{"error":"unauthorized"}`))
@@ -254,9 +278,9 @@ func TestGetReposWithLabel_APIError(t *testing.T) {
 	defer srv.Close()
 
 	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
-	_, err := c.GetReposWithLabel(context.Background(), "label-uuid-123")
+	_, err := c.GetLabeledRepoIDs(context.Background(), "label-uuid-123")
 	if err == nil {
-		t.Fatal("GetReposWithLabel() expected error for 401, got nil")
+		t.Fatal("GetLabeledRepoIDs() expected error for 401, got nil")
 	}
 	apiErr, ok := err.(*APIError)
 	if !ok {
