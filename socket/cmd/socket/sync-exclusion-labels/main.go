@@ -14,6 +14,12 @@ const (
 	defaultGitHubTopic = "socket-exclude-from-license-policy"
 )
 
+// Sync is intentionally one-directional: it only adds the Socket exclusion label
+// to repos that carry the GitHub topic. It never removes the label when the topic
+// is absent. Removal requires a prior backfill — applying the GitHub topic to every
+// repo that already has the Socket label — so that both sides agree before a
+// bidirectional sync can run safely.
+
 func main() {
 	apiKey := mustGetEnv("SOCKET_API_KEY")
 	socketOrg := mustGetEnv("SOCKET_ORG")
