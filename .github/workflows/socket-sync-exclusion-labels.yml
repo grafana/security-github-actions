@@ -5,16 +5,15 @@ on:
     - cron: '0 6 * * *'  # daily at 06:00 UTC
   workflow_dispatch:
     inputs:
-      github-topic:
-        description: GitHub topic that marks repos for Socket license policy exclusion
+      repository-name:
+        description: Add the exclusion label to a specific repo immediately (leave blank to run the full sync)
         required: false
-        default: socket-exclude-from-license-policy
       slack-channel-id:
         description: Slack channel ID to post the run notification to
         required: false
 
 env:
-  DEFAULT_SLACK_CHANNEL: C05A6NW2JF6
+  DEFAULT_SLACK_CHANNEL: C058KTKU7RP
 
 permissions:
   id-token: write
@@ -51,14 +50,22 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Sync exclusion labels
+      - name: Add exclusion label to single repo
+        if: ${{ inputs.repository-name != '' }}
+        uses: ./socket/cmd/socket/add-exclusion-label-to-repo
+        with:
+          socket_api_token: ${{ fromJSON(steps.vault-secrets.outputs.secrets).SOCKET_API_KEY }}
+          socket_org: grafana
+          repository_name: ${{ inputs.repository-name }}
+
+      - name: Sync exclusion labels across all repos
+        if: ${{ inputs.repository-name == '' }}
         uses: ./socket/cmd/socket/sync-exclusion-labels
         with:
           socket_api_token: ${{ fromJSON(steps.vault-secrets.outputs.secrets).SOCKET_API_KEY }}
           socket_org: grafana
           github_token: ${{ steps.github-app-token.outputs.token }}
           github_org: grafana
-          github_topic: ${{ inputs.github-topic || 'socket-exclude-from-license-policy' }}
 
       - name: Send Slack notification
         if: always()
@@ -68,6 +75,6 @@ jobs:
           payload: |
             {
               "channel": "${{ inputs.slack-channel-id || env.DEFAULT_SLACK_CHANNEL }}",
-              "text": "Socket exclusion label sync completed (topic: `${{ inputs.github-topic || 'socket-exclude-from-license-policy' }}`)"
+              "text": "Socket exclusion label sync completed${{ inputs.repository-name != '' && format(' for repo `{0}`', inputs.repository-name) || '' }}"
             }
           payload-templated: false
