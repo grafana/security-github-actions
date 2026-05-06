@@ -9,7 +9,7 @@ import (
 
 // --------------- ParseRepo ---------------
 
-func TestParseRepo_ReturnsRepo(t *testing.T) {
+func TestParseRepo_ParsesIDAndName(t *testing.T) {
 	data := []byte(`{"id":"repo-uuid-123","name":"my-repo"}`)
 
 	repo, err := ParseRepo(data)
@@ -24,7 +24,7 @@ func TestParseRepo_ReturnsRepo(t *testing.T) {
 	}
 }
 
-func TestParseRepo_ReturnsErrorGivenInvalidJSON(t *testing.T) {
+func TestParseRepo_ErrorOnInvalidJSON(t *testing.T) {
 	_, err := ParseRepo([]byte(`{invalid`))
 	if err == nil {
 		t.Fatal("ParseRepo() expected error for invalid JSON, got nil")
@@ -33,7 +33,7 @@ func TestParseRepo_ReturnsErrorGivenInvalidJSON(t *testing.T) {
 
 // --------------- GetRepo ---------------
 
-func TestGetRepo_Success(t *testing.T) {
+func TestGetRepo_ReturnsRepoByName(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %s, want GET", r.Method)
@@ -63,7 +63,7 @@ func TestGetRepo_Success(t *testing.T) {
 	}
 }
 
-func TestGetRepo_NotFound(t *testing.T) {
+func TestGetRepo_ErrorOn404(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(`not found`))
@@ -80,7 +80,7 @@ func TestGetRepo_NotFound(t *testing.T) {
 	}
 }
 
-func TestGetRepo_APIError(t *testing.T) {
+func TestGetRepo_PropagatesAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"error":"internal server error"}`))

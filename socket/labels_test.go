@@ -11,14 +11,14 @@ import (
 
 // --------------- NewAssociateLabelRequest ---------------
 
-func TestNewAssociateLabelRequest_SetsRepositoryID(t *testing.T) {
+func TestNewAssociateLabelRequest_SetsRepositoryIDField(t *testing.T) {
 	req := NewAssociateLabelRequest("repo-uuid-456")
 	if req.RepositoryID != "repo-uuid-456" {
 		t.Errorf("RepositoryID = %q, want %q", req.RepositoryID, "repo-uuid-456")
 	}
 }
 
-func TestNewAssociateLabelRequest_MarshalJSON(t *testing.T) {
+func TestNewAssociateLabelRequest_SerializesAsRepositoryID(t *testing.T) {
 	req := NewAssociateLabelRequest("repo-uuid-456")
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -36,7 +36,7 @@ func TestNewAssociateLabelRequest_MarshalJSON(t *testing.T) {
 
 // --------------- ParseLabels ---------------
 
-func TestParseLabels_ReturnsLabels(t *testing.T) {
+func TestParseLabels_ParsesIDAndNameFields(t *testing.T) {
 	data := []byte(`[
 		{"id":"label-uuid-123","name":"exclude-from-license-policy"},
 		{"id":"label-uuid-456","name":"some-other-label"}
@@ -57,7 +57,7 @@ func TestParseLabels_ReturnsLabels(t *testing.T) {
 	}
 }
 
-func TestParseLabels_ReturnsErrorGivenInvalidJSON(t *testing.T) {
+func TestParseLabels_ErrorOnInvalidJSON(t *testing.T) {
 	_, err := ParseLabels([]byte(`{invalid`))
 	if err == nil {
 		t.Fatal("ParseLabels() expected error for invalid JSON, got nil")
@@ -66,7 +66,7 @@ func TestParseLabels_ReturnsErrorGivenInvalidJSON(t *testing.T) {
 
 // --------------- GetLabelByName ---------------
 
-func TestGetLabelByName_ReturnsLabel(t *testing.T) {
+func TestGetLabelByName_ReturnsFirstMatchingLabel(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %s, want GET", r.Method)
@@ -99,7 +99,7 @@ func TestGetLabelByName_ReturnsLabel(t *testing.T) {
 	}
 }
 
-func TestGetLabelByName_LabelNotFound(t *testing.T) {
+func TestGetLabelByName_ErrorWhenLabelAbsent(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`[{"id":"label-uuid-999","name":"some-other-label"}]`))
@@ -113,7 +113,7 @@ func TestGetLabelByName_LabelNotFound(t *testing.T) {
 	}
 }
 
-func TestGetLabelByName_APIError(t *testing.T) {
+func TestGetLabelByName_PropagatesAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(`{"error":"unauthorized"}`))
@@ -134,66 +134,9 @@ func TestGetLabelByName_APIError(t *testing.T) {
 	}
 }
 
-// --------------- AssociateLabel ---------------
-
-func TestAssociateLabel_Success(t *testing.T) {
-	labelID := "label-uuid-123"
-	repoID := "repo-uuid-456"
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("method = %s, want POST", r.Method)
-		}
-		wantPath := "/orgs/test-org/repos/labels/label-uuid-123/associate"
-		if r.URL.Path != wantPath {
-			t.Errorf("path = %s, want %s", r.URL.Path, wantPath)
-		}
-
-		var body map[string]string
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decoding request body: %v", err)
-		}
-		if body["repository_id"] != repoID {
-			t.Errorf("body repository_id = %q, want %q", body["repository_id"], repoID)
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
-	}))
-	defer srv.Close()
-
-	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
-	err := c.AssociateLabel(context.Background(), labelID, repoID)
-	if err != nil {
-		t.Fatalf("AssociateLabel() error = %v", err)
-	}
-}
-
-func TestAssociateLabel_Error(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"internal"}`))
-	}))
-	defer srv.Close()
-
-	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
-	err := c.AssociateLabel(context.Background(), "lid", "rid")
-	if err == nil {
-		t.Fatal("AssociateLabel() expected error, got nil")
-	}
-
-	apiErr, ok := err.(*APIError)
-	if !ok {
-		t.Fatalf("error type = %T, want *APIError", err)
-	}
-	if apiErr.StatusCode != http.StatusInternalServerError {
-		t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusInternalServerError)
-	}
-}
-
 // --------------- GetLabeledRepoIDs ---------------
 
-func TestGetLabeledRepoIDs_ReturnsIDs(t *testing.T) {
+func TestGetLabeledRepoIDs_ReturnsRepositoryIDsFromResult(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %s, want GET", r.Method)
@@ -230,7 +173,7 @@ func TestGetLabeledRepoIDs_ReturnsIDs(t *testing.T) {
 	}
 }
 
-func TestGetLabeledRepoIDs_EmptyRepositoryIDs(t *testing.T) {
+func TestGetLabeledRepoIDs_ReturnsEmptySliceWhenNoReposLabeled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{
@@ -256,7 +199,7 @@ func TestGetLabeledRepoIDs_EmptyRepositoryIDs(t *testing.T) {
 	}
 }
 
-func TestGetLabeledRepoIDs_EmptyResults(t *testing.T) {
+func TestGetLabeledRepoIDs_ErrorWhenLabelNotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"nextPage": null, "results": []}`))
@@ -270,7 +213,7 @@ func TestGetLabeledRepoIDs_EmptyResults(t *testing.T) {
 	}
 }
 
-func TestGetLabeledRepoIDs_APIError(t *testing.T) {
+func TestGetLabeledRepoIDs_PropagatesAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(`{"error":"unauthorized"}`))
@@ -291,7 +234,64 @@ func TestGetLabeledRepoIDs_APIError(t *testing.T) {
 	}
 }
 
-func TestAssociateLabel_AlreadyLabeled(t *testing.T) {
+// --------------- AssociateLabel ---------------
+
+func TestAssociateLabel_PostsRepoIDToAssociateEndpoint(t *testing.T) {
+	labelID := "label-uuid-123"
+	repoID := "repo-uuid-456"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		wantPath := "/orgs/test-org/repos/labels/label-uuid-123/associate"
+		if r.URL.Path != wantPath {
+			t.Errorf("path = %s, want %s", r.URL.Path, wantPath)
+		}
+
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decoding request body: %v", err)
+		}
+		if body["repository_id"] != repoID {
+			t.Errorf("body repository_id = %q, want %q", body["repository_id"], repoID)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
+	err := c.AssociateLabel(context.Background(), labelID, repoID)
+	if err != nil {
+		t.Fatalf("AssociateLabel() error = %v", err)
+	}
+}
+
+func TestAssociateLabel_PropagatesAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"internal"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
+	err := c.AssociateLabel(context.Background(), "lid", "rid")
+	if err == nil {
+		t.Fatal("AssociateLabel() expected error, got nil")
+	}
+
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want *APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusInternalServerError {
+		t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusInternalServerError)
+	}
+}
+
+func TestAssociateLabel_ReturnsErrAlreadyLabeledOn409(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 		w.Write([]byte(`{"error":"already associated"}`))

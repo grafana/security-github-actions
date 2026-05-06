@@ -11,7 +11,7 @@ import (
 
 // --------------- ListOrgReposWithTopic ---------------
 
-func TestListOrgReposWithTopic_ReturnsMatchingRepos(t *testing.T) {
+func TestListOrgReposWithTopic_FiltersToReposWithMatchingTopic(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %s, want GET", r.Method)
@@ -42,7 +42,7 @@ func TestListOrgReposWithTopic_ReturnsMatchingRepos(t *testing.T) {
 	}
 }
 
-func TestListOrgReposWithTopic_ReturnsEmpty(t *testing.T) {
+func TestListOrgReposWithTopic_ReturnsEmptyWhenNoTopicMatch(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode([]githubOrgRepo{
@@ -61,7 +61,7 @@ func TestListOrgReposWithTopic_ReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestListOrgReposWithTopic_APIError(t *testing.T) {
+func TestListOrgReposWithTopic_PropagatesAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
@@ -74,12 +74,12 @@ func TestListOrgReposWithTopic_APIError(t *testing.T) {
 	}
 }
 
-func TestListOrgReposWithTopic_Pagination(t *testing.T) {
-	// First page returns 100 repos (2 matching), second page returns <100 (stopping condition).
+func TestListOrgReposWithTopic_FetchesAllPagesUntilPartialPage(t *testing.T) {
+	// First page returns a full 100 repos (stopping condition is < 100).
+	// Second page returns fewer than 100, ending pagination.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if r.URL.Query().Get("page") == "1" {
-			// Return 100 repos, 1 with the target topic
 			repos := make([]githubOrgRepo, 100)
 			for i := range repos {
 				repos[i] = githubOrgRepo{Name: fmt.Sprintf("repo-%d", i), Topics: []string{"other"}}
@@ -87,7 +87,6 @@ func TestListOrgReposWithTopic_Pagination(t *testing.T) {
 			repos[0].Topics = []string{"socket-exclude-from-license-policy"}
 			json.NewEncoder(w).Encode(repos)
 		} else {
-			// Last page: fewer than 100 repos, 1 with the target topic
 			json.NewEncoder(w).Encode([]githubOrgRepo{
 				{Name: "repo-last", Topics: []string{"socket-exclude-from-license-policy"}},
 			})
