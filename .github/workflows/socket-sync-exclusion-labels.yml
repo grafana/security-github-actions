@@ -8,7 +8,7 @@ on:
       github-topic:
         description: GitHub topic that marks repos for Socket license policy exclusion
         required: false
-        default: socket-exclude
+        default: socket-exclude-from-license-policy
       slack-channel-id:
         description: Slack channel ID to post the run notification to
         required: false
@@ -33,7 +33,18 @@ jobs:
           vault_instance: dev
           repo_secrets: |
             SOCKET_API_KEY=socket:SOCKET_API_KEY
+            GH_APP_ID=github-app:app-id
+            GH_APP_INSTALLATION_ID=github-app:app-installation-id
+            GH_APP_PRIVATE_KEY=github-app:app-private-key
           export_env: false
+
+      - name: Generate GitHub App token
+        id: github-app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd2428c6d6ebea2a858 # v2.0.6
+        with:
+          app-id: ${{ fromJSON(steps.vault-secrets.outputs.secrets).GH_APP_ID }}
+          private-key: ${{ fromJSON(steps.vault-secrets.outputs.secrets).GH_APP_PRIVATE_KEY }}
+          owner: grafana
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -45,9 +56,9 @@ jobs:
         with:
           socket_api_token: ${{ fromJSON(steps.vault-secrets.outputs.secrets).SOCKET_API_KEY }}
           socket_org: grafana
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ steps.github-app-token.outputs.token }}
           github_org: grafana
-          github_topic: ${{ inputs.github-topic || 'socket-exclude' }}
+          github_topic: ${{ inputs.github-topic || 'socket-exclude-from-license-policy' }}
 
       - name: Send Slack notification
         if: always()
@@ -57,6 +68,6 @@ jobs:
           payload: |
             {
               "channel": "${{ inputs.slack-channel-id || env.DEFAULT_SLACK_CHANNEL }}",
-              "text": "Socket exclusion label sync completed (topic: `${{ inputs.github-topic || 'socket-exclude' }}`)"
+              "text": "Socket exclusion label sync completed (topic: `${{ inputs.github-topic || 'socket-exclude-from-license-policy' }}`)"
             }
           payload-templated: false

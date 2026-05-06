@@ -11,7 +11,7 @@ import (
 
 const (
 	exclusionLabelName = "exclude-from-license-policy"
-	defaultGitHubTopic = "socket-exclude"
+	defaultGitHubTopic = "socket-exclude-from-license-policy"
 )
 
 func main() {
@@ -25,22 +25,43 @@ func main() {
 	ghClient := socket.NewGitHubClient(githubToken)
 	socketClient := socket.NewClient(apiKey, socketOrg)
 
+	// Fetch the exclusion label from Socket.
 	label, err := socketClient.GetLabelByName(ctx, exclusionLabelName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: getting exclusion label from Socket: %v\n", err)
 		os.Exit(1)
 	}
 
-	repoNames, err := ghClient.SearchReposByTopic(ctx, githubOrg, githubTopic)
+	// Fetch all GitHub repos in the org that carry the exclusion topic.
+	githubRepos, err := ghClient.ListOrgReposWithTopic(ctx, githubOrg, githubTopic)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: listing GitHub repos with topic %q: %v\n", githubTopic, err)
 		os.Exit(1)
 	}
-	fmt.Printf("Found %d GitHub repos with topic %q\n", len(repoNames), githubTopic)
+	fmt.Printf("Found %d GitHub repos with topic %q\n", len(githubRepos), githubTopic)
 
-	var applied, alreadyLabeled, notInSocket, failed int
+	// Fetch Socket repos that already have the exclusion label applied.
+	alreadyLabeled, err := socketClient.GetReposWithLabel(ctx, label.ID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: fetching Socket repos with exclusion label: %v\n", err)
+		os.Exit(1)
+	}
+	labeledSet := make(map[string]bool, len(alreadyLabeled))
+	for _, r := range alreadyLabeled {
+		labeledSet[r.Name] = true
+	}
+	fmt.Printf("Found %d Socket repos already carrying the exclusion label\n", len(alreadyLabeled))
 
-	for _, repoName := range repoNames {
+	// Apply the label to any GitHub repo not yet covered in Socket.
+	var applied, skipped, notInSocket, failed int
+
+	for _, repoName := range githubRepos {
+		if labeledSet[repoName] {
+			fmt.Printf("  [skip] %s: exclusion label already applied\n", repoName)
+			skipped++
+			continue
+		}
+
 		repo, err := socketClient.GetRepo(ctx, repoName)
 		if err != nil {
 			if err.Error() == "not found" {
@@ -54,9 +75,10 @@ func main() {
 		}
 
 		if err := socketClient.AssociateLabel(ctx, label.ID, repo.ID); err != nil {
+			// Guard against concurrent runs labeling the same repo simultaneously.
 			if errors.Is(err, socket.ErrAlreadyLabeled) {
 				fmt.Printf("  [skip] %s: exclusion label already applied\n", repoName)
-				alreadyLabeled++
+				skipped++
 				continue
 			}
 			fmt.Fprintf(os.Stderr, "  [error] %s: applying exclusion label: %v\n", repoName, err)
@@ -69,7 +91,7 @@ func main() {
 	}
 
 	fmt.Printf("\nSummary: %d applied, %d already labeled, %d not in Socket, %d failed\n",
-		applied, alreadyLabeled, notInSocket, failed)
+		applied, skipped, notInSocket, failed)
 
 	if failed > 0 {
 		os.Exit(1)

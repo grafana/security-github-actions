@@ -191,6 +191,82 @@ func TestAssociateLabel_Error(t *testing.T) {
 	}
 }
 
+// --------------- GetReposWithLabel ---------------
+
+func TestGetReposWithLabel_ReturnsRepos(t *testing.T) {
+	labelID := "label-uuid-123"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("method = %s, want GET", r.Method)
+		}
+		wantPath := "/orgs/test-org/repos/labels/label-uuid-123/repos"
+		if r.URL.Path != wantPath {
+			t.Errorf("path = %s, want %s", r.URL.Path, wantPath)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[
+			{"id":"repo-uuid-1","name":"repo-a"},
+			{"id":"repo-uuid-2","name":"repo-b"}
+		]`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
+	repos, err := c.GetReposWithLabel(context.Background(), labelID)
+	if err != nil {
+		t.Fatalf("GetReposWithLabel() error = %v", err)
+	}
+	if len(repos) != 2 {
+		t.Fatalf("len(repos) = %d, want 2", len(repos))
+	}
+	if repos[0].Name != "repo-a" {
+		t.Errorf("repos[0].Name = %q, want %q", repos[0].Name, "repo-a")
+	}
+	if repos[1].Name != "repo-b" {
+		t.Errorf("repos[1].Name = %q, want %q", repos[1].Name, "repo-b")
+	}
+}
+
+func TestGetReposWithLabel_ReturnsEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
+	repos, err := c.GetReposWithLabel(context.Background(), "label-uuid-123")
+	if err != nil {
+		t.Fatalf("GetReposWithLabel() error = %v", err)
+	}
+	if len(repos) != 0 {
+		t.Fatalf("len(repos) = %d, want 0", len(repos))
+	}
+}
+
+func TestGetReposWithLabel_APIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"unauthorized"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("test-key", "test-org", WithBaseURL(srv.URL))
+	_, err := c.GetReposWithLabel(context.Background(), "label-uuid-123")
+	if err == nil {
+		t.Fatal("GetReposWithLabel() expected error for 401, got nil")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want *APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusUnauthorized {
+		t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusUnauthorized)
+	}
+}
+
 func TestAssociateLabel_AlreadyLabeled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)

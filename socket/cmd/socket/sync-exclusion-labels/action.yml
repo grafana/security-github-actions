@@ -19,7 +19,7 @@ inputs:
   github_topic:
     description: GitHub topic that marks a repo for Socket license policy exclusion
     required: false
-    default: socket-exclude
+    default: socket-exclude-from-license-policy
 
 runs:
   using: composite

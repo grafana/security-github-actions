@@ -3,14 +3,15 @@ package socket
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-// --------------- SearchReposByTopic ---------------
+// --------------- ListOrgReposWithTopic ---------------
 
-func TestSearchReposByTopic_ReturnsSinglePage(t *testing.T) {
+func TestListOrgReposWithTopic_ReturnsMatchingRepos(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %s, want GET", r.Method)
@@ -20,82 +21,89 @@ func TestSearchReposByTopic_ReturnsSinglePage(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(githubSearchResult{
-			TotalCount: 2,
-			Items:      []githubRepoItem{{Name: "repo-a"}, {Name: "repo-b"}},
+		json.NewEncoder(w).Encode([]githubOrgRepo{
+			{Name: "repo-a", Topics: []string{"socket-exclude-from-license-policy", "golang"}},
+			{Name: "repo-b", Topics: []string{"other-topic"}},
+			{Name: "repo-c", Topics: []string{"socket-exclude-from-license-policy"}},
 		})
 	}))
 	defer srv.Close()
 
 	c := &GitHubClient{Token: "test-token", BaseURL: srv.URL, HTTPClient: http.DefaultClient}
-	names, err := c.SearchReposByTopic(context.Background(), "test-org", "socket-exclude")
+	names, err := c.ListOrgReposWithTopic(context.Background(), "test-org", "socket-exclude-from-license-policy")
 	if err != nil {
-		t.Fatalf("SearchReposByTopic() error = %v", err)
+		t.Fatalf("ListOrgReposWithTopic() error = %v", err)
 	}
 	if len(names) != 2 {
 		t.Fatalf("len(names) = %d, want 2", len(names))
 	}
-	if names[0] != "repo-a" || names[1] != "repo-b" {
-		t.Errorf("names = %v, want [repo-a repo-b]", names)
+	if names[0] != "repo-a" || names[1] != "repo-c" {
+		t.Errorf("names = %v, want [repo-a repo-c]", names)
 	}
 }
 
-func TestSearchReposByTopic_ReturnsEmpty(t *testing.T) {
+func TestListOrgReposWithTopic_ReturnsEmpty(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(githubSearchResult{TotalCount: 0, Items: []githubRepoItem{}})
+		json.NewEncoder(w).Encode([]githubOrgRepo{
+			{Name: "repo-a", Topics: []string{"unrelated"}},
+		})
 	}))
 	defer srv.Close()
 
 	c := &GitHubClient{Token: "test-token", BaseURL: srv.URL, HTTPClient: http.DefaultClient}
-	names, err := c.SearchReposByTopic(context.Background(), "test-org", "socket-exclude")
+	names, err := c.ListOrgReposWithTopic(context.Background(), "test-org", "socket-exclude-from-license-policy")
 	if err != nil {
-		t.Fatalf("SearchReposByTopic() error = %v", err)
+		t.Fatalf("ListOrgReposWithTopic() error = %v", err)
 	}
 	if len(names) != 0 {
 		t.Fatalf("len(names) = %d, want 0", len(names))
 	}
 }
 
-func TestSearchReposByTopic_APIError(t *testing.T) {
+func TestListOrgReposWithTopic_APIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer srv.Close()
 
 	c := &GitHubClient{Token: "test-token", BaseURL: srv.URL, HTTPClient: http.DefaultClient}
-	_, err := c.SearchReposByTopic(context.Background(), "test-org", "socket-exclude")
+	_, err := c.ListOrgReposWithTopic(context.Background(), "test-org", "socket-exclude-from-license-policy")
 	if err == nil {
-		t.Fatal("SearchReposByTopic() expected error for 401, got nil")
+		t.Fatal("ListOrgReposWithTopic() expected error for 401, got nil")
 	}
 }
 
-func TestSearchReposByTopic_Pagination(t *testing.T) {
+func TestListOrgReposWithTopic_Pagination(t *testing.T) {
+	// First page returns 100 repos (2 matching), second page returns <100 (stopping condition).
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if r.URL.Query().Get("page") == "1" {
-			json.NewEncoder(w).Encode(githubSearchResult{
-				TotalCount: 3,
-				Items:      []githubRepoItem{{Name: "repo-a"}, {Name: "repo-b"}},
-			})
+			// Return 100 repos, 1 with the target topic
+			repos := make([]githubOrgRepo, 100)
+			for i := range repos {
+				repos[i] = githubOrgRepo{Name: fmt.Sprintf("repo-%d", i), Topics: []string{"other"}}
+			}
+			repos[0].Topics = []string{"socket-exclude-from-license-policy"}
+			json.NewEncoder(w).Encode(repos)
 		} else {
-			json.NewEncoder(w).Encode(githubSearchResult{
-				TotalCount: 3,
-				Items:      []githubRepoItem{{Name: "repo-c"}},
+			// Last page: fewer than 100 repos, 1 with the target topic
+			json.NewEncoder(w).Encode([]githubOrgRepo{
+				{Name: "repo-last", Topics: []string{"socket-exclude-from-license-policy"}},
 			})
 		}
 	}))
 	defer srv.Close()
 
 	c := &GitHubClient{Token: "test-token", BaseURL: srv.URL, HTTPClient: &http.Client{}}
-	names, err := c.SearchReposByTopic(context.Background(), "test-org", "socket-exclude")
+	names, err := c.ListOrgReposWithTopic(context.Background(), "test-org", "socket-exclude-from-license-policy")
 	if err != nil {
-		t.Fatalf("SearchReposByTopic() error = %v", err)
+		t.Fatalf("ListOrgReposWithTopic() error = %v", err)
 	}
-	if len(names) != 3 {
-		t.Fatalf("len(names) = %d, want 3", len(names))
+	if len(names) != 2 {
+		t.Fatalf("len(names) = %d, want 2", len(names))
 	}
-	if names[2] != "repo-c" {
-		t.Errorf("names[2] = %q, want %q", names[2], "repo-c")
+	if names[1] != "repo-last" {
+		t.Errorf("names[1] = %q, want %q", names[1], "repo-last")
 	}
 }
