@@ -45,7 +45,9 @@ jobs:
       - zizmor-check
     if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@5cec40ba1a943db268a9bb33f208c006b161d372
+    # Pilot (#326): pin to grafana/shared-workflows PR head (feat/zizmor-collection-ignore-326-v2 @ 5cbb63c).
+    # Bump SHA when shared-workflows changes; swap to main pin when rolled out.
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@5cbb63c571adffc041a20b6a057645a8549e6b7c
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: high
