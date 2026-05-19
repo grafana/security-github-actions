@@ -45,8 +45,8 @@ jobs:
       - zizmor-check
     if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
-    # #326 pilot — shared-workflows feat/zizmor-collection-ignore-326-v2 (PR #1944)
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@1f447f273db6a24663c2daf4e1876f1e4298e93b
+    # #326 pilot — shared-workflows feat/zizmor-collection-ignore-326-v2 (PR #1945)
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@664db527638a19b4f7a8aa175ec2eff9033fb5cd
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: high
