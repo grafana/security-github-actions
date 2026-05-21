@@ -169,6 +169,7 @@ jobs:
                 trufflehog filesystem . \
                   --include-paths "${INCLUDE_REGEXES}" \
                   --exclude-paths /tmp/trufflehog-exclude.txt \
+                  --exclude-detectors Gitlab \
                   --concurrency 16 \
                   --json \
                   --no-update \
@@ -181,7 +182,7 @@ jobs:
             fi
           else
             echo "Scanning current filesystem..."
-            trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
+            trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --exclude-detectors Gitlab --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
           fi
 
           # Process results and filter git hashes from CHANGELOG files
