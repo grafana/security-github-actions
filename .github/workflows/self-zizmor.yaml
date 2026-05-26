@@ -15,7 +15,7 @@ jobs:
     name: Check whether there are things to scan
     permissions:
       contents: read
-    runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
+    runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # grafana private repos use self-hosted ARM64; other orgs use ubuntu-latest
     outputs:
       found-files: ${{ steps.zizmor-check.outputs.found-files }}
     steps:
@@ -47,7 +47,7 @@ jobs:
 
     uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@638f24848a49edb0bd14f771b6dd37b4455f1591
     with:
-      runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
+      runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # grafana private repos use self-hosted ARM64; other orgs use ubuntu-latest
       fail-severity: high
       min-severity: high
       min-confidence: low
