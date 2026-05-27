@@ -1,36 +1,37 @@
 name: zizmor GitHub Actions static analysis
 on:
+  # Source-repo runs only. Required-workflow consumers don't use `push:`.
   push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**/*.yml'
+      - '.github/workflows/**/*.yaml'
+      - '**/action.yml'
+      - '**/action.yaml'
+  # What the org ruleset invokes in every target repo.
+  # Required workflows that are skipped via paths filtering are reported as
+  # passing, so this is safe under the "Require workflows to pass before
+  # merging" ruleset.
+  # https://docs.github.com/en/actions/concepts/security/required-workflows
   pull_request:
     types:
-      - edited
       - opened
       - ready_for_review
       - synchronize
       - reopened
+    paths:
+      - '.github/workflows/**/*.yml'
+      - '.github/workflows/**/*.yaml'
+      - '**/action.yml'
+      - '**/action.yaml'
   merge_group:
     types: [checks_requested]
+
+concurrency:
+  group: zizmor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  zizmor-check:
-    name: Check whether there are things to scan
-    permissions:
-      contents: read
-    runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # grafana private repos use self-hosted ARM64; other orgs use ubuntu-latest
-    outputs:
-      found-files: ${{ steps.zizmor-check.outputs.found-files }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-      - name: Run zizmor
-        id: zizmor-check
-        shell: bash
-        run: |
-          FOUND_FILES=false
-          SEARCH=$(find . -path "**/.github/workflows/*.yml" -o -path "**/.github/workflows/*.yaml" -o -path "**/action.yml" -o -path "**/action.yaml")
-          if [ -n "$SEARCH" ]; then
-              FOUND_FILES=true
-          fi
-          echo "found-files=${FOUND_FILES}" >> $GITHUB_OUTPUT
   zizmor:
     name: Run zizmor
 
@@ -40,10 +41,6 @@ jobs:
       id-token: write
       pull-requests: write
       security-events: write
-
-    needs:
-      - zizmor-check
-    if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
     uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@638f24848a49edb0bd14f771b6dd37b4455f1591
     with:
