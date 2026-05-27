@@ -22,6 +22,10 @@ test('good: passes', async () => {
   assert.deepEqual(await runFor('good'), []);
 });
 
+test('good-above-required: npmMinimalAgeGate higher than required is accepted (stricter = ok)', async () => {
+  assert.deepEqual(await runFor('good-above-required'), []);
+});
+
 test('bad-missing: missing .yarnrc.yml => 3 findings', async () => {
   const findings = await runFor('bad-missing');
   assert.equal(findings.length, 3);
@@ -33,9 +37,13 @@ test('bad-missing-keys: 2 missing-key findings', async () => {
   assert.equal(findings.length, 2);
 });
 
-test('bad-wrong-value: 3 wrong-value findings', async () => {
+test('bad-wrong-value: 3 findings — two wrong-value, one below-minimum (npmMinimalAgeGate)', async () => {
   const findings = await runFor('bad-wrong-value');
   assert.equal(findings.length, 3);
+  for (const f of findings) assert.match(f.title, /wrong value|below minimum/);
+  const ageFinding = findings.find((f) => f.title.includes('npmMinimalAgeGate'));
+  assert.ok(ageFinding, 'expected a finding for npmMinimalAgeGate');
+  assert.match(ageFinding!.title, /below minimum/);
 });
 
 test('bad-forbidden-key: approvedGitRepositories present with values => 1 finding', async () => {

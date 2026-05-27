@@ -1,16 +1,19 @@
 import { join } from 'node:path';
 import type { Check, Finding, Root, RepoContext } from '../types.ts';
-import { readConfigIfPresent } from './_config-helpers.ts';
+import { readConfigIfPresent, valueMeetsRequirement } from './_config-helpers.ts';
+import type { CompareMode } from './_config-helpers.ts';
 import { parseTopLevelYamlScalars } from './pnpm-workspace-correct.ts';
 
 export const CHECK_ID = 'yarnrc-correct';
 
 const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/supply-chain/docs/checks/yarnrc-correct.md';
 
-const REQUIRED: ReadonlyArray<{ key: string; expected: string }> = [
-  { key: 'enableScripts', expected: 'false' },
-  { key: 'enableImmutableInstalls', expected: 'true' },
-  { key: 'npmMinimalAgeGate', expected: '4320' },
+// `npmMinimalAgeGate` is minutes — higher = more secure, so we accept ≥ 4320.
+// The two boolean keys must match exactly.
+const REQUIRED: ReadonlyArray<{ key: string; expected: string; mode: CompareMode }> = [
+  { key: 'enableScripts', expected: 'false', mode: 'eq' },
+  { key: 'enableImmutableInstalls', expected: 'true', mode: 'eq' },
+  { key: 'npmMinimalAgeGate', expected: '4320', mode: 'min-int' },
 ];
 
 // Even the *presence* of this key is a security risk per the hardening guide.
@@ -32,18 +35,30 @@ export const check: Check = {
 
     const findings: Finding[] = [];
     const top = parseTopLevelYamlScalars(text);
-    for (const { key, expected } of REQUIRED) {
+    for (const { key, expected, mode } of REQUIRED) {
       const actual = top.get(key);
       if (actual === undefined) {
         findings.push(missing(root.path, relPath, key, expected, `${relPath} does not set ${key}.`));
-      } else if (actual !== expected) {
+      } else if (!valueMeetsRequirement(actual, expected, mode)) {
+        const title =
+          mode === 'min-int'
+            ? `\`${key}\` below minimum in ${relPath} (got ${actual}, want >= ${expected})`
+            : `\`${key}\` has wrong value in ${relPath} (got ${actual}, want ${expected})`;
+        const detail =
+          mode === 'min-int'
+            ? `Expected \`${key}: ${expected}\` or higher, found \`${key}: ${actual}\` in ${relPath}.`
+            : `Expected \`${key}: ${expected}\`, found \`${key}: ${actual}\` in ${relPath}.`;
+        const fix =
+          mode === 'min-int'
+            ? `Set \`${key}: ${expected}\` (or higher) in ${relPath}.`
+            : `Set \`${key}: ${expected}\` in ${relPath}.`;
         findings.push({
           check_id: CHECK_ID,
           severity: 'blocking',
           root: root.path,
-          title: `\`${key}\` has wrong value in ${relPath} (got ${actual}, want ${expected})`,
-          detail: `Expected \`${key}: ${expected}\`, found \`${key}: ${actual}\` in ${relPath}.`,
-          fix: `Set \`${key}: ${expected}\` in ${relPath}.`,
+          title,
+          detail,
+          fix,
           doc_link: DOC_LINK,
         });
       }

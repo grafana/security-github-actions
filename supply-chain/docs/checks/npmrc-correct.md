@@ -16,6 +16,11 @@ min-release-age=3
 One **finding is emitted per missing or wrong-valued key**, so a fresh
 repo with no `.npmrc` will get three findings telling you exactly what to add.
 
+`min-release-age` is treated as a **minimum**: any value ≥ 3 passes. A
+team that wants a longer cooldown (e.g. `min-release-age=7`) is more
+strict, not less, and is not flagged. The other two keys are
+boolean/enum where the literal value is the only correct setting.
+
 ## Why we check this
 
 Each of the three keys closes a *different* attack vector. None of them

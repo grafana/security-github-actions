@@ -21,6 +21,10 @@ Forbidden (one finding if present):
 approvedGitRepositories: ...   # the key being present at all is a violation
 ```
 
+`npmMinimalAgeGate` is treated as a **minimum**: any value ≥ 4320 passes.
+A team that wants a longer cooldown (e.g. `10080` for 1 week) is more
+strict, not less, and is not flagged. The two boolean keys are exact-match.
+
 ## Why we check this
 
 Three keys to enable, one key whose **mere presence** is a violation —

@@ -19,6 +19,19 @@ One **finding per missing or wrong-valued key**.
 teams will have different lists; the org guide allows them but doesn't
 mandate specific contents.
 
+### Value semantics
+
+- `minimumReleaseAge` is a **minimum**: any value ≥ 4320 passes. A team
+  that wants a 1-week (10080) cooldown is more strict, not less, and is
+  not flagged.
+- `strictDepBuilds` and `blockExoticSubdeps` are booleans — only the
+  literal `true` is correct.
+
+Note: pnpm ≥ 10.16.0 added a default of 1440 (1 day) for `minimumReleaseAge`
+when the key is omitted. That default is still below the org's 3-day
+requirement, so a missing key still fails this check — but if you've set
+the key explicitly to anything ≥ 4320, you're fine.
+
 ## Why we check this
 
 pnpm is the most-recommended package manager in the org guide because its

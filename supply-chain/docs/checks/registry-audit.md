@@ -4,12 +4,34 @@
 
 ## What this check verifies
 
-Runs the package manager's audit command (`npm audit` / `pnpm audit` /
-`yarn npm audit`) against each root and emits an advisory finding when
-the audit reports **high** or **critical** severity vulnerabilities.
+Runs the package manager's audit command (`npm audit --json` /
+`pnpm audit --json` / `yarn npm audit --recursive --all --json`) against
+each root and emits **one finding per high or critical advisory** with
+the affected package, advisory title, vulnerable version range, and a
+direct link to the GHSA / CVE page.
 
-Lower severities (moderate, low, info) are not surfaced — the comment
-fatigue cost exceeds the actionable signal for advisory-grade output.
+Lower severities (moderate, low, info) are not surfaced — the
+comment-fatigue cost exceeds the actionable signal for advisory-grade
+output.
+
+To keep the report readable on repos with many advisories, output is
+**capped at 20 advisories per root** (critical first, then high,
+alphabetical within severity). When the cap kicks in, a single summary
+finding tells you how many more exist and how to view the full list
+locally.
+
+### Example output
+
+A finding looks like:
+
+> **lodash (critical): Prototype Pollution in lodash**
+> Vulnerable: `<4.17.21` · Patched: `>=4.17.21`
+> Fix: Update `lodash` to satisfy `>=4.17.21`.
+> [Docs](https://github.com/advisories/GHSA-35jh-r3h4-6jhm) · `registry-audit`
+
+The doc link is the **advisory's own URL** when available — that page
+has the upstream maintainer's full mitigation guidance, which is far
+more authoritative than anything we could duplicate here.
 
 ## Why we check this
 

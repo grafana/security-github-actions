@@ -41,3 +41,26 @@ function stripQuotes(value: string): string {
   }
   return value;
 }
+
+// How to compare an actual config value against the required value.
+// - `eq`        — strict string equality. For boolean/enum settings where the
+//                 only "correct" value is the literal we specify
+//                 (e.g. `ignore-scripts=true`, `strictDepBuilds: true`).
+// - `min-int`   — actual must parse as an integer and be >= expected. For
+//                 release-age gates: a HIGHER cooldown is MORE secure, so
+//                 anything at or above the required floor is fine.
+export type CompareMode = 'eq' | 'min-int';
+
+// True when `actual` satisfies the requirement according to `mode`.
+// For `min-int` a non-integer `actual` (e.g. `"true"`, garbage) fails.
+export function valueMeetsRequirement(
+  actual: string,
+  expected: string,
+  mode: CompareMode,
+): boolean {
+  if (mode === 'eq') return actual === expected;
+  const a = Number.parseInt(actual, 10);
+  const e = Number.parseInt(expected, 10);
+  if (Number.isNaN(a) || Number.isNaN(e)) return false;
+  return a >= e;
+}

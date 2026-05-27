@@ -22,6 +22,10 @@ test('good: all three required keys set => no findings', async () => {
   assert.deepEqual(await runFor('good'), []);
 });
 
+test('good-above-required: minimumReleaseAge higher than required is accepted (stricter = ok)', async () => {
+  assert.deepEqual(await runFor('good-above-required'), []);
+});
+
 test('bad-missing: missing pnpm-workspace.yaml => 3 findings', async () => {
   const findings = await runFor('bad-missing');
   assert.equal(findings.length, 3);
@@ -33,10 +37,13 @@ test('bad-missing-keys: only minimumReleaseAge present => 2 findings', async () 
   assert.equal(findings.length, 2);
 });
 
-test('bad-wrong-value: 3 wrong-value findings', async () => {
+test('bad-wrong-value: 3 findings — two wrong-value, one below-minimum (minimumReleaseAge)', async () => {
   const findings = await runFor('bad-wrong-value');
   assert.equal(findings.length, 3);
-  for (const f of findings) assert.match(f.title, /wrong value/);
+  for (const f of findings) assert.match(f.title, /wrong value|below minimum/);
+  const ageFinding = findings.find((f) => f.title.includes('minimumReleaseAge'));
+  assert.ok(ageFinding, 'expected a finding for minimumReleaseAge');
+  assert.match(ageFinding!.title, /below minimum/);
 });
 
 test('not-pnpm-root: npm root skips the check entirely', async () => {
