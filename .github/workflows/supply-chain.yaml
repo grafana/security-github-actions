@@ -88,7 +88,7 @@ jobs:
         # continue-on-error so the artifact upload still runs even when there
         # are blocking findings; the "Enforce" step re-fails the job below.
         continue-on-error: true
-        run: node --experimental-strip-types src/cli.ts "$GITHUB_WORKSPACE/target"
+        run: node --experimental-strip-types src/check.ts --no-audit "$GITHUB_WORKSPACE/target"
 
       - name: Upload static findings
         if: ${{ always() && hashFiles(format('{0}/static-findings.json', runner.temp)) != '' }}
@@ -136,7 +136,7 @@ jobs:
         env:
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SUPPLY_CHAIN_FINDINGS_OUT: ${{ runner.temp }}/audit-findings.json
-        run: node --experimental-strip-types src/audit-cli.ts "$GITHUB_WORKSPACE/target"
+        run: node --experimental-strip-types src/check.ts --audit-only "$GITHUB_WORKSPACE/target"
 
       - name: Upload audit findings
         if: ${{ always() && hashFiles(format('{0}/audit-findings.json', runner.temp)) != '' }}

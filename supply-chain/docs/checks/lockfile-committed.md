@@ -19,23 +19,44 @@ separate `packagemanager-pinned` check handles the missing-pin case.
 
 ## Why we check this
 
-The lockfile is the single source of truth for which exact versions of
-dependencies (transitive included) will be installed. Without a committed
-lockfile:
+The lockfile is the **foundation that every other hardening control sits on
+top of**. Without it, none of the others have teeth.
 
-- Two `npm install` runs minutes apart can produce different dependency
-  graphs. CI, the developer's laptop, and the production builder may all
-  install different code.
-- A malicious package published moments before your CI's install step
-  can be selected against a wide version range when no lockfile pins the
-  resolution.
-- Hardening controls like `min-release-age` and `allow-git=none` are
-  applied at install time. If install resolutions aren't stable, the
-  controls become harder to reason about.
+### The attack
 
-A lockfile that exists on disk but is not committed (e.g. in `.gitignore`)
-provides none of these guarantees: CI checks out the repo and starts from
-scratch.
+A typical npm-style supply-chain compromise unfolds in three steps:
+
+1. Attacker compromises a package's publish token (phishing, credential leak)
+   or, increasingly, takes over a maintainer account directly.
+2. Attacker publishes a malicious patch — say `popular-lib@4.7.1` after the
+   legitimate `4.7.0`.
+3. Every CI run that installs `"popular-lib": "^4.7.0"` from a manifest
+   *without* a lockfile resolves to `4.7.1` and runs the malicious code.
+
+The community detection-and-yank cycle is typically hours: someone notices
+weird behavior, npm unpublishes. But your CI ran in step 3.
+
+A committed lockfile pins the resolved version + integrity hash. Even if a
+poisoned version exists in the registry, `npm ci` / `pnpm install
+--frozen-lockfile` / `yarn install --immutable` refuses to install it —
+the lockfile says "I expect this exact bytes-on-disk for `popular-lib`."
+
+### Why the lockfile must be **committed**, not just on disk
+
+A lockfile in `.gitignore` is no lockfile at all. CI clones the repo and
+starts from scratch — there's nothing to compare against. The "looks fine
+locally, fails in CI" failure mode is exactly the developer-trust gap an
+attacker exploits.
+
+### How this interacts with the other checks
+
+- `min-release-age=3` (npm) / `minimumReleaseAge: 4320` (pnpm) / 
+  `npmMinimalAgeGate` (yarn) refuse to install package versions younger
+  than 3 days. The lockfile is what those gates compare *against* —
+  without a lockfile, every install resolves fresh and the age gate
+  decides for itself, which is a wider attack surface.
+- `lockfile-conflict` (next check) enforces "exactly one lockfile per
+  root" so we always know which file is authoritative.
 
 ## How to fix
 

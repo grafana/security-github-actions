@@ -10,15 +10,37 @@ is a hard fail.
 
 ## Why we check this
 
-A root with multiple lockfiles almost always means a half-finished
-migration between package managers. None of the downstream checks can
-behave correctly: which manager rules apply? `.npmrc` or
-`pnpm-workspace.yaml`? Rather than guess and silently pick one — risking
-hardening controls being applied against the wrong manager — we refuse
-to proceed.
+A root with two lockfiles is **silently insecure** in a way that's hard
+for a reviewer to notice.
 
-The doc is also explicit that "always commit the lockfile" means the
-*one* lockfile, not two competing ones.
+### The ambiguity attackers exploit
+
+If `package-lock.json` and `pnpm-lock.yaml` both exist at the same root:
+
+- The developer's laptop probably uses pnpm (`pnpm install`) and ignores
+  `package-lock.json`.
+- A CI step that runs `npm ci` (because someone copy-pasted a template
+  workflow) installs from the *other* lockfile — the one nobody ever
+  audits or updates.
+- The two lockfiles will inevitably drift. The one nobody uses *stays
+  pinned at whatever an old, possibly-compromised commit set it to*.
+  When a future workflow accidentally runs `npm ci`, that lockfile is
+  what gets installed.
+
+### Why our checks can't proceed safely
+
+Most other checks key on `packageManager:` to pick which rules to apply
+(`.npmrc` vs `pnpm-workspace.yaml` vs `.yarnrc.yml`). If the manifest
+says pnpm but the repo has a `package-lock.json` alongside the
+`pnpm-lock.yaml`, *we genuinely don't know* whether the hardening should
+apply to one, the other, or both. Picking one and proceeding would let
+the unaudited lockfile coast through without the controls we promise.
+Failing fast is safer.
+
+### The doc is explicit
+
+The hardening guide says "always commit the lockfile" — the singular is
+load-bearing.
 
 ## How to fix
 

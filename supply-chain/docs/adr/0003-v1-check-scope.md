@@ -1,5 +1,10 @@
 # V1 check scope: which checks block, which only advise
 
+> **Update:** `node-version-pinned` (Check 6) was subsequently removed
+> entirely — see [ADR-0008](./0008-remove-node-version-pinned.md). The
+> rationale below for demoting it to advisory is preserved for context.
+
+
 The blocking set (workflow fails → merge blocked) is restricted to checks whose findings are unambiguous: read one well-known file, compare to an expected value, pass or fail with no judgement call. These are checks 1–5 and 7 from the hardening guide: `.npmrc` correct, `pnpm-workspace.yaml` correct, `.yarnrc.yml` correct, lockfile committed, `packageManager:` pinned + recent, lockfile conflict. The advisory set (PR comment only) is the heuristic checks 8–11 (install-not-ci, OIDC publishing, npx confusion, cache poisoning), the audit checks 13–14, and check 6 (Node version pinned + recent). Check 12 (shrink the dep tree) is dropped — there is no machine-checkable rule.
 
 ## Considered

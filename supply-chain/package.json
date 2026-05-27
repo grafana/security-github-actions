@@ -7,6 +7,7 @@
   },
   "packageManager": "npm@11.10.0",
   "scripts": {
+    "check": "node --experimental-strip-types src/check.ts",
     "test": "node --test --experimental-strip-types --test-name-pattern='.*' 'tests/**/*.test.ts'"
   },
   "devDependencies": {

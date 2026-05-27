@@ -20,6 +20,10 @@ If the workflow says you have a **blocking** finding, you must fix it (or
 file a [suppression](#suppressions)) before merge. **Advisory** findings
 appear in the same comment but do not block merging.
 
+You can also run the exact same checks on a local clone — no CI needed:
+`cd supply-chain && npm install && npm run check -- /path/to/repo`. See
+[Running it locally](#running-it-locally-against-a-local-clone-no-ci-required).
+
 ## What gets checked
 
 ### Blocking (fail merge if violated)
@@ -37,7 +41,6 @@ appear in the same comment but do not block merging.
 
 | ID | What it checks |
 |---|---|
-| `node-version-pinned` | A Node.js version ≥ 24.5.0 is pinned via `engines.node`, `.nvmrc`, `.node-version`, or `volta.node`. |
 | `install-not-ci` | Workflows / Dockerfiles / Tiltfile / Makefile / mise.toml / shell scripts use the lockfile-strict install command (`npm ci`, `--frozen-lockfile`, `--immutable`). |
 | `npx-confusion` | `npx <name>` invocations use either an allowlisted bare name, a scoped name, or `--package`. |
 | `oidc-publishing` | Workflows that call `npm/pnpm/yarn publish` use OIDC trusted publishing (`id-token: write`, no long-lived tokens). |
@@ -102,22 +105,84 @@ The workflow ships incrementally. Where each capability is on the curve:
 |---|---|
 | Workspace-aware walker | ✅ shipped |
 | All blocking checks | ✅ shipped |
-| Heuristic advisory checks (`install-not-ci`, `npx-confusion`, `oidc-publishing`, `cache-poisoning-publish`, `node-version-pinned`) | ✅ shipped |
+| Heuristic advisory checks (`install-not-ci`, `npx-confusion`, `oidc-publishing`, `cache-poisoning-publish`) | ✅ shipped |
 | Workflow file at `.github/workflows/supply-chain.yaml` | ✅ shipped |
 | Sticky PR comment | ✅ shipped |
 | Suppression mechanism (`.github/supply-chain.yml`) | ✅ shipped |
 | `registry-audit` advisory (run `npm/pnpm/yarn audit` in a dedicated job, merged into the unified comment) | ✅ shipped |
 
-## For developers of this tool
+## Running it locally (against a local clone, no CI required)
 
-Local development:
+You don't need a GitHub Actions runner to use this. The same checks run from a
+single `npm run check` command against any local directory.
+
+### Prerequisites
+
+- Node.js ≥ 24.5.0 (for native TypeScript execution)
+- `npm install` once in `supply-chain/` to fetch dev dependencies (`typescript`, `@types/node`)
+
+### Usage
+
+```bash
+# from inside the security-github-actions repo:
+cd supply-chain
+npm install            # one-time, fetches typescript + @types/node only
+
+# Check the surrounding repository (the default):
+npm run check
+
+# Check a specific local clone:
+npm run check -- /path/to/some/other/repo
+
+# Skip the network-dependent registry-audit check (faster, works offline):
+npm run check -- --no-audit /path/to/some/repo
+```
+
+### Output format
+
+By default the CLI renders **terminal-friendly text** with colors when stdout
+is a terminal, and **GitHub-flavored Markdown** when piped/redirected (so
+`npm run check > report.md` Just Works). Force either format explicitly:
+
+```bash
+npm run check -- --format=text /path/to/repo        # ANSI-coloured, readable
+npm run check -- --format=markdown /path/to/repo    # raw markdown, for paste
+```
+
+Colors honour `NO_COLOR` and `FORCE_COLOR` automatically (no flag needed).
+
+### Exit codes
+
+- **0** — no blocking findings (advisory findings are allowed and printed)
+- **1** — at least one blocking finding
+- **2** — unexpected error (parse crash, etc.)
+
+### Pre-rollout org survey
+
+Loop over many clones to see what would happen if the org ruleset were flipped
+today — same code as the CI workflow, no CI needed:
+
+```bash
+mkdir -p /tmp/sc-scan && cd /tmp/sc-scan
+for repo in $(gh repo list grafana --limit 100 --json nameWithOwner -q '.[].nameWithOwner'); do
+    gh repo clone "$repo" "${repo##*/}" -- --depth 1 2>/dev/null || continue
+    echo "=== $repo ==="
+    ( cd ~/dev/security-github-actions/supply-chain && \
+      npm run check --silent -- --no-audit "/tmp/sc-scan/${repo##*/}" ) | head -30
+done
+```
+
+`--no-audit` is recommended for surveys: it keeps the loop fast and avoids
+hammering the registry with audit requests.
+
+## For developers of this tool
 
 ```bash
 cd supply-chain
 node --version            # must be >= 24.5.0
-npm install               # only fetches devDependencies (typescript, @types/node)
-npm test                  # node --test against tests/**/*.test.ts
-node --experimental-strip-types src/cli.ts /path/to/some/repo
+npm install               # devDependencies only (typescript, @types/node)
+npm test                  # 75 fixture-driven unit tests
+npm run check             # dogfood against the surrounding repo
 ```
 
 ### Layout
@@ -143,28 +208,31 @@ supply-chain/
     checks/               # per-check fix guide (each linked from the finding)
 ```
 
-### Workflow architecture (3 jobs, 3 CLIs)
+### Workflow architecture (3 jobs, 1 CLI)
 
-The workflow runs three jobs that fan-in to a single sticky comment:
+The workflow runs three jobs that fan-in to a single sticky comment, all driven
+by **the same** `src/check.ts` invoked with different mode flags:
 
 ```
-              ┌──────────┐         static-findings.json (artifact)
-              │  static  │────────────────────────────────────────┐
-              └──────────┘                                          │
-detect ──┬─►   src/cli.ts                                           ▼
-         │                                                     ┌─────────┐
-         │   ┌──────────┐         audit-findings.json          │ report  │
-         └─► │  audit   │─────────────────────────────────────►│         │
-             └──────────┘                                       └─────────┘
-             src/audit-cli.ts                                   src/render-cli.ts
-                                                                + src/post-comment.ts
+              ┌─────────────────────────────────────┐  static-findings.json
+              │ static                               │
+              │   check.ts --no-audit                │──────────────┐
+              │   (blocking → exit 1)                │              │
+              └─────────────────────────────────────┘              ▼
+detect ──┬─►                                                 ┌──────────┐
+         │    ┌─────────────────────────────────────┐        │ report   │
+         │    │ audit                                │  audit │          │
+         └─►  │   check.ts --audit-only              │──────► │          │
+              │   (continue-on-error: true)          │        └──────────┘
+              └─────────────────────────────────────┘        render-cli.ts
+                                                              + post-comment.ts
 ```
 
-- **`static`** runs `src/cli.ts` which invokes every non-network check across all roots. Its **non-zero exit on blocking findings is what fails the workflow** and gates merge. Writes `static-findings.json`.
-- **`audit`** runs `src/audit-cli.ts` which invokes only `registry-audit`. **Always non-blocking** (`continue-on-error: true` on the job — ADR-0001). Writes `audit-findings.json`.
-- **`report`** depends on `[static, audit]` with `if: always()`. Downloads both artifacts, runs `src/render-cli.ts` to merge the payloads and produce one markdown body, then `src/post-comment.ts` posts/updates the sticky PR comment.
+- **`static`** runs `check.ts --no-audit`. Every non-network check across all roots. Its **non-zero exit on blocking findings is what fails the workflow** and gates merge. Writes `static-findings.json`.
+- **`audit`** runs `check.ts --audit-only`. Only `registry-audit`. **Always non-blocking** at the job level (`continue-on-error: true` — ADR-0001). Writes `audit-findings.json`.
+- **`report`** depends on `[static, audit]` with `if: always()`. Downloads both artifacts, runs `render-cli.ts` to merge the payloads and produce one markdown body, then `post-comment.ts` posts/updates the sticky PR comment.
 
-Each CLI also writes its own GitHub Step Summary so that the *job's* page shows its own findings — but the **single comment on the PR is the source of truth**.
+The same `check.ts` (with no flags) is what runs locally via `npm run check`. CI mode vs local mode is determined entirely by environment variables: if `SUPPLY_CHAIN_FINDINGS_OUT` or `GITHUB_STEP_SUMMARY` is set, it writes to those; otherwise it prints the rendered markdown to stdout.
 
 ### Adding a new check
 
