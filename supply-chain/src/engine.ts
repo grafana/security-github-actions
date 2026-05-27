@@ -1,0 +1,82 @@
+// Shared engine: discover roots, run a given list of checks, apply
+// suppressions, return findings. Used by both the static and audit CLIs.
+
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { env } from 'node:process';
+import { discoverRoots } from './walk.ts';
+import { loadSuppressions, partitionBySuppression } from './suppressions.ts';
+import type { Check, Finding, RepoContext, CheckId } from './types.ts';
+
+const execFileP = promisify(execFile);
+
+export type EngineResult = {
+  ran: CheckId[];
+  active: Finding[];
+  suppressed: Finding[];
+  // Number of roots that contributed to the result. 0 means the activation
+  // gate matched no package.json — callers should treat this as "skipped".
+  rootCount: number;
+};
+
+export async function runChecks(
+  repoRoot: string,
+  checks: Check[],
+): Promise<EngineResult> {
+  const ctx: RepoContext = {
+    repoRoot,
+    trackedFiles: await loadTrackedFiles(repoRoot),
+  };
+
+  const roots = await discoverRoots(repoRoot);
+  if (roots.length === 0) {
+    return { ran: checks.map((c) => c.id), active: [], suppressed: [], rootCount: 0 };
+  }
+
+  const rawFindings: Finding[] = [];
+  for (const root of roots) {
+    for (const c of checks) {
+      const fs = await c.run(root, ctx);
+      rawFindings.push(...fs);
+    }
+  }
+
+  const { entries, errors } = await loadSuppressions(repoRoot);
+  const { active, suppressed } = partitionBySuppression(rawFindings, entries);
+
+  for (const err of errors) {
+    active.push({
+      check_id: 'suppression-file-invalid',
+      severity: 'blocking',
+      root: '.',
+      title: `Invalid suppression file: ${err.file}${err.line ? ` (line ${err.line})` : ''}`,
+      detail: err.message,
+      fix: 'Fix the suppression entry or remove the file.',
+      doc_link: 'https://github.com/grafana/security-github-actions/blob/main/supply-chain/README.md#suppressions',
+    });
+  }
+
+  return {
+    ran: checks.map((c) => c.id),
+    active,
+    suppressed,
+    rootCount: roots.length,
+  };
+}
+
+async function loadTrackedFiles(repoRoot: string): Promise<Set<string> | null> {
+  try {
+    const { stdout: out } = await execFileP('git', ['ls-files'], { cwd: repoRoot });
+    return new Set(out.split('\n').filter(Boolean));
+  } catch {
+    return null;
+  }
+}
+
+export function buildRunUrl(): string {
+  const server = env.GITHUB_SERVER_URL ?? 'https://github.com';
+  const repo = env.GITHUB_REPOSITORY ?? '';
+  const runId = env.GITHUB_RUN_ID ?? '';
+  if (repo && runId) return `${server}/${repo}/actions/runs/${runId}`;
+  return server;
+}

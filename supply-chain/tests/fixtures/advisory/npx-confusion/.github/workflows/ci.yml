@@ -1,0 +1,11 @@
+name: ci
+on: push
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npx tsc --noEmit          # known-safe, allowlisted
+      - run: npx prettier --check .     # known-safe
+      - run: npx @grafana/foo build     # scoped: safe
+      - run: npx --package @grafana/foo bar  # explicit --package: safe
+      - run: npx some-mystery-tool     # FLAGGED

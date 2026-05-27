@@ -1,0 +1,3 @@
+minimumReleaseAge: 60
+strictDepBuilds: false
+blockExoticSubdeps: false

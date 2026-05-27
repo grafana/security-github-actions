@@ -1,0 +1,8 @@
+name: build
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm install
+      - run: pnpm install --no-frozen-lockfile

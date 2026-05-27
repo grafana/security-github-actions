@@ -1,0 +1,16 @@
+{
+  "name": "@grafana/supply-chain-check",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.5.0"
+  },
+  "packageManager": "npm@11.10.0",
+  "scripts": {
+    "test": "node --test --experimental-strip-types --test-name-pattern='.*' 'tests/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "@types/node": "^24.0.0"
+  }
+}
