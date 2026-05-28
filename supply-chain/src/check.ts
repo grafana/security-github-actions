@@ -9,9 +9,11 @@
 //   --audit-only   run only the registry-audit check
 //                  (used by the CI `audit` job)
 //   --format=<f>   override the stdout format. `text` (terminal-friendly,
-//                  default in a TTY) or `markdown` (default when piped or
-//                  in CI). The CI env-var sinks always receive markdown
-//                  regardless of this flag.
+//                  default in a TTY), `markdown` (default when piped or in
+//                  CI), or `html` (writes to file + auto-opens browser in
+//                  TTY, streams to stdout when piped).
+//   --no-html      skip writing the local HTML report (TTY only)
+//   --no-open      write the HTML report but don't auto-open the browser
 //
 // Behaviour is driven by environment variables:
 //   SUPPLY_CHAIN_FINDINGS_OUT — if set, write a JSON ReportPayload to this
@@ -20,8 +22,9 @@
 //                               (so the CI job's page shows its findings)
 //   GITHUB_RUN_URL            — link used in the rendered report's footer
 //
-// If neither of the env-driven sinks is set (the local case), the rendered
-// markdown is written to stdout.
+// Local default (TTY, no env sinks): full text report on stdout, HTML
+// dropped to ~/.cache/supply-chain/, browser auto-opened. Use --no-html
+// / --no-open to opt out.
 //
 // Path: positional argument; defaults to the current working directory.
 // `cd supply-chain && npm run check` therefore checks the surrounding repo.
@@ -30,38 +33,46 @@
 //   0 — no blocking findings
 //   1 — at least one blocking finding
 //   2 — unexpected error
-//
-// Note: the audit checks are all `severity: 'advisory'`, so a clean
-// `--audit-only` run always exits 0. The one exception is a malformed
-// `.github/supply-chain.yml` (which we surface as a synthetic blocking
-// finding); that's caught by the CI workflow's `continue-on-error: true`
-// on the audit job.
 
-import { writeFile } from 'node:fs/promises';
-import { argv, env, exit, stdout, stderr } from 'node:process';
-import { resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { argv, env, exit, platform, stdout, stderr } from 'node:process';
+import { homedir } from 'node:os';
+import { resolve, join, dirname } from 'node:path';
 
 import { renderMarkdown } from './report.ts';
 import { renderText } from './text-report.ts';
+import { renderHtml } from './html-report.ts';
 import { runChecks, buildRunUrl } from './engine.ts';
 import { writePayload } from './io.ts';
 import { makeProgressCallback } from './progress.ts';
 import { STATIC_CHECKS, AUDIT_CHECKS, ALL_CHECKS } from './registry.ts';
 import type { Check } from './types.ts';
 import type { ReportPayload } from './io.ts';
+import type { ReportInput } from './report.ts';
 
 type Mode = 'all' | 'static-only' | 'audit-only';
-type Format = 'text' | 'markdown';
-type Args = { mode: Mode; target: string; format: Format | 'auto' };
+type Format = 'text' | 'markdown' | 'html';
+type Args = {
+  mode: Mode;
+  target: string;
+  format: Format | 'auto';
+  noHtml: boolean;
+  noOpen: boolean;
+};
 
 function parseArgs(raw: string[]): Args {
   let mode: Mode = 'all';
   let format: Format | 'auto' = 'auto';
+  let noHtml = false;
+  let noOpen = false;
   const positional: string[] = [];
   for (const a of raw) {
     if (a === '--no-audit') mode = 'static-only';
     else if (a === '--audit-only') mode = 'audit-only';
-    else if (a === '--format=text' || a === '--format=markdown') {
+    else if (a === '--no-html') noHtml = true;
+    else if (a === '--no-open') noOpen = true;
+    else if (a === '--format=text' || a === '--format=markdown' || a === '--format=html') {
       format = a.split('=')[1] as Format;
     } else if (a.startsWith('--')) {
       stderr.write(`supply-chain: unknown flag: ${a}\n`);
@@ -70,28 +81,51 @@ function parseArgs(raw: string[]): Args {
   }
   const cwd = env.INIT_CWD ?? env.PWD ?? '.';
   const target = resolve(positional[0] ?? cwd);
-  return { mode, target, format };
+  return { mode, target, format, noHtml, noOpen };
 }
 
-// Pick the stdout format. CI env-var sinks always use markdown; for stdout,
-// `text` is the default when we're attached to a terminal so that the user
-// sees a readable report rather than raw `<details>` blocks. `--format` forces.
 function resolveStdoutFormat(requested: Format | 'auto'): Format {
   if (requested !== 'auto') return requested;
   return stdout.isTTY ? 'text' : 'markdown';
 }
 
+function htmlReportPath(): string {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  return join(homedir(), '.cache', 'supply-chain', `report-${ts}.html`);
+}
+
+// Best-effort browser-open. Detached + stdio:'ignore' so the child outlives
+// our process and doesn't pollute the terminal. Any failure is silent — the
+// user still has the URL printed on stderr.
+function openInBrowser(path: string): void {
+  const cmd =
+    platform === 'darwin' ? 'open' : platform === 'win32' ? 'start' : 'xdg-open';
+  try {
+    const child = spawn(cmd, [path], { detached: true, stdio: 'ignore' });
+    child.on('error', () => {
+      /* swallow — auto-open is a convenience, not a contract */
+    });
+    child.unref();
+  } catch {
+    /* same */
+  }
+}
+
+async function writeHtmlReport(reportInput: ReportInput): Promise<string> {
+  const path = htmlReportPath();
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, renderHtml(reportInput));
+  return path;
+}
+
 function checksForMode(mode: Mode): { checks: Check[]; source: ReportPayload['source'] } {
   if (mode === 'static-only') return { checks: STATIC_CHECKS, source: 'static' };
   if (mode === 'audit-only') return { checks: AUDIT_CHECKS, source: 'audit' };
-  // "all" means a one-shot local run; for JSON-output purposes it's labelled
-  // as "static" (the renderer doesn't care). The CI never sends "all" through
-  // the JSON path because the two CI jobs always pass an explicit mode.
   return { checks: ALL_CHECKS, source: 'static' };
 }
 
 async function main(): Promise<void> {
-  const { mode, target, format } = parseArgs(argv.slice(2));
+  const { mode, target, format, noHtml, noOpen } = parseArgs(argv.slice(2));
   const { checks, source } = checksForMode(mode);
 
   stderr.write(`supply-chain: checking ${target} (${mode})\n`);
@@ -104,14 +138,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  const reportInput = {
+  const reportInput: ReportInput = {
     ran: result.ran,
     findings: result.active,
     suppressed: result.suppressed,
     runUrl: env.GITHUB_RUN_URL ?? buildRunUrl(),
   };
 
-  // CI sinks always receive markdown — GitHub renders it.
+  // CI sinks (env-driven). These do not mix with the local flow below.
   const findingsOut = env.SUPPLY_CHAIN_FINDINGS_OUT;
   if (findingsOut) {
     await writePayload(findingsOut, {
@@ -121,18 +155,35 @@ async function main(): Promise<void> {
       suppressed: result.suppressed,
     });
   }
-
   const summaryFile = env.GITHUB_STEP_SUMMARY;
   if (summaryFile) {
     await writeFile(summaryFile, renderMarkdown(reportInput) + '\n', { flag: 'a' });
   }
 
-  // Local case (no env-driven sinks): write to stdout, picking the format
-  // automatically based on whether stdout is a TTY (or honouring --format=).
+  // Local flow (no env-driven sinks).
   if (!findingsOut && !summaryFile) {
     const fmt = resolveStdoutFormat(format);
-    const body = fmt === 'text' ? renderText(reportInput) : renderMarkdown(reportInput);
-    stdout.write(body + '\n');
+
+    // 1. Render to stdout per the chosen format. `--format=html` in a TTY
+    //    is the one case we don't write text to the terminal — the HTML
+    //    file IS the report; spewing HTML source to the terminal would be
+    //    silly. Piped html still streams to stdout (so `> report.html` works).
+    if (fmt === 'html' && !stdout.isTTY) {
+      stdout.write(renderHtml(reportInput));
+    } else if (fmt !== 'html') {
+      const body = fmt === 'text' ? renderText(reportInput) : renderMarkdown(reportInput);
+      stdout.write(body + '\n');
+    }
+
+    // 2. In a TTY, ALSO drop the HTML file and (by default) auto-open it.
+    //    Always on regardless of format unless the user opted out — even
+    //    when stdout already showed the text report. The browser view is
+    //    nicer for sharing / scrolling / interactivity.
+    if (stdout.isTTY && !noHtml) {
+      const path = await writeHtmlReport(reportInput);
+      stderr.write(`\n📄 Report: file://${path}\n`);
+      if (!noOpen) openInBrowser(path);
+    }
   }
 
   const blocking = result.active.filter((f) => f.severity === 'blocking');

@@ -1,25 +1,25 @@
-// Progress rendering for the supply-chain CLI. Two modes:
+// Progress rendering for the supply-chain CLI.
 //
-// - **TTY** (running locally in a terminal): updates a single line in place
-//   with `\r`, so the user sees a single "currently running" indicator that
-//   changes as checks complete. After `done`, the line is cleared so the
-//   final report renders cleanly below.
+// - **TTY** (local terminal): a single in-place line with an animated braille
+//   spinner that ticks every 80ms. As each check starts, the line updates;
+//   when a slow check (≥1s) finishes, the line is "promoted" to a permanent
+//   ✓ line, scrolling above the still-active spinner. Colors via
+//   node:util#styleText, which auto-respects NO_COLOR / FORCE_COLOR.
 //
-// - **non-TTY** (running in CI, piped to a file, redirected): writes static
-//   log lines on each check start. Slow checks (>1s) also log their
-//   duration on completion. Fast checks are silent on completion to avoid
-//   wallpaper.
+// - **non-TTY** (CI, piped, redirected): static one-line-per-event log. No
+//   ANSI codes, no spinner, no in-place updates — the kind of output that
+//   reads well in `actions/upload-artifact` logs.
 //
-// All output goes to stderr — the rendered report on stdout is undisturbed,
+// All output goes to stderr. The rendered report on stdout is undisturbed
 // so `npm run check > report.md` still produces clean markdown.
 
+import { styleText } from 'node:util';
 import type { ProgressCallback, ProgressEvent } from './engine.ts';
 
 const SLOW_MS = 1000;
-// ANSI: \r = carriage return, \x1b[2K = clear entire line, \x1b[1m / \x1b[0m
-// = bold / reset. We intentionally don't use the full styleText machinery
-// here — the progress line shouldn't pick up rich colors that compete with
-// the final report.
+const SPINNER_INTERVAL_MS = 80;
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+// ANSI: \r = carriage return, \x1b[2K = clear entire line.
 const CLEAR_LINE = '\r\x1b[2K';
 
 export function makeProgressCallback(stream: NodeJS.WriteStream): ProgressCallback {
@@ -29,44 +29,76 @@ export function makeProgressCallback(stream: NodeJS.WriteStream): ProgressCallba
 }
 
 function ttyCallback(stream: NodeJS.WriteStream): ProgressCallback {
-  // We keep a single line on the terminal that gets overwritten. When a
-  // slow check finishes, we briefly "promote" the line to a permanent log
-  // (write a newline) and then start a fresh in-place line.
-  let lastLine = '';
+  // The "live" line is whatever the spinner is currently animating. When
+  // empty, the spinner is paused — nothing's actively running.
+  let liveLine = '';
+  let frame = 0;
+  let interval: NodeJS.Timeout | null = null;
 
-  const write = (line: string): void => {
+  const c = palette();
+
+  const renderLive = (): void => {
+    if (liveLine.length === 0) return;
+    const spinner = c.cyan(SPINNER_FRAMES[frame % SPINNER_FRAMES.length]!);
     stream.write(CLEAR_LINE);
-    stream.write(line);
-    lastLine = line;
+    stream.write(`${spinner} ${liveLine}`);
+    frame += 1;
+  };
+
+  const startSpinner = (): void => {
+    if (interval !== null) return;
+    renderLive(); // immediate first frame so there's no delay before something appears
+    interval = setInterval(renderLive, SPINNER_INTERVAL_MS);
+    // unref so the timer never holds the process open past the report.
+    interval.unref();
+  };
+
+  const stopSpinner = (): void => {
+    if (interval !== null) {
+      clearInterval(interval);
+      interval = null;
+    }
   };
 
   return (e: ProgressEvent) => {
     switch (e.kind) {
       case 'discovery-start':
-        write('  discovering roots…');
+        liveLine = c.dim('discovering roots…');
+        startSpinner();
         return;
+
       case 'discovery-end': {
+        stopSpinner();
+        stream.write(CLEAR_LINE);
         const summary = describeDiscovery(e.jsRoots, e.goRoots);
-        write(`  ${summary} (${e.durationMs}ms)`);
+        stream.write(`${c.green('✓')} ${summary} ${c.dim(`(${e.durationMs}ms)`)}\n`);
+        liveLine = '';
         return;
       }
+
       case 'check-start':
-        write(`  [${e.index}/${e.total}] ${e.checkId} on ${describeRoot(e.root)}…`);
+        liveLine = `${c.dim(`[${e.index}/${e.total}]`)} ${c.bold(e.checkId)} on ${c.cyan(describeRoot(e.root))}…`;
+        startSpinner();
         return;
+
       case 'check-end':
         if (e.durationMs >= SLOW_MS) {
-          // Promote: write a permanent line, then leave the in-place line
-          // empty until the next check-start fills it.
+          // Promote slow check to a permanent line above the spinner.
+          stopSpinner();
           stream.write(CLEAR_LINE);
-          stream.write(`  ✓ ${e.checkId} on ${describeRoot(e.root)} (${formatDuration(e.durationMs)})\n`);
-          lastLine = '';
+          stream.write(
+            `${c.green('✓')} ${c.bold(e.checkId)} on ${c.cyan(describeRoot(e.root))} ${c.dim(`(${formatDuration(e.durationMs)})`)}\n`,
+          );
+          liveLine = '';
+          // Next check-start will restart the spinner.
         }
         return;
+
       case 'done':
-        // Clear the in-place line so the final report renders cleanly.
-        if (lastLine.length > 0) {
+        stopSpinner();
+        if (liveLine.length > 0) {
           stream.write(CLEAR_LINE);
-          lastLine = '';
+          liveLine = '';
         }
         return;
     }
@@ -87,11 +119,30 @@ function staticCallback(stream: NodeJS.WriteStream): ProgressCallback {
           stream.write(`    ↳ ${e.checkId} took ${formatDuration(e.durationMs)}\n`);
         }
         return;
-      // discovery-start and done are noisy in CI logs; skip them.
       case 'discovery-start':
       case 'done':
         return;
     }
+  };
+}
+
+type Palette = {
+  bold: (s: string) => string;
+  dim: (s: string) => string;
+  green: (s: string) => string;
+  cyan: (s: string) => string;
+};
+
+function palette(): Palette {
+  // styleText auto-detects whether the stream supports colors (respects
+  // NO_COLOR / FORCE_COLOR). We don't pass a stream explicitly so it
+  // defaults to checking process.stdout — close enough; in practice both
+  // stdout and stderr share TTY status when one of them is a terminal.
+  return {
+    bold: (s) => styleText('bold', s),
+    dim: (s) => styleText('dim', s),
+    green: (s) => styleText('green', s),
+    cyan: (s) => styleText('cyan', s),
   };
 }
 
@@ -114,5 +165,4 @@ function formatDuration(ms: number): string {
   return `${Math.round(seconds)}s`;
 }
 
-// Re-exported for tests.
 export const __test = { describeDiscovery, describeRoot, formatDuration };

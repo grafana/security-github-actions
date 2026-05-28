@@ -155,16 +155,34 @@ npm run check -- --no-audit /path/to/some/repo
 
 ### Output format
 
-By default the CLI renders **terminal-friendly text** with colors when stdout
-is a terminal, and **GitHub-flavored Markdown** when piped/redirected (so
-`npm run check > report.md` Just Works). Force either format explicitly:
+**Default local run** (in a terminal): you get the full text report on
+stdout *and* an HTML report at `~/.cache/supply-chain/report-<timestamp>.html`
+that's auto-opened in your default browser. The path is also printed on
+stderr as a clickable `file://` URL.
+
+Force a different stdout format explicitly:
 
 ```bash
-npm run check -- --format=text /path/to/repo        # ANSI-coloured, readable
+npm run check -- --format=text /path/to/repo        # ANSI-coloured (default in TTY)
 npm run check -- --format=markdown /path/to/repo    # raw markdown, for paste
+npm run check -- --format=html /path/to/repo        # HTML only — no terminal text
 ```
 
-Colors honour `NO_COLOR` and `FORCE_COLOR` automatically (no flag needed).
+Opt-out flags:
+
+```bash
+npm run check -- --no-html /path/to/repo            # skip the HTML file entirely
+npm run check -- --no-open /path/to/repo            # write HTML but don't auto-open
+```
+
+When stdout is **piped** (`npm run check > out.md`), the HTML side is
+disabled regardless — only the chosen format reaches stdout.
+
+The HTML report is fully self-contained: inlined CSS, no JS, no external
+assets. Findings render as a responsive 2-column grid (3 columns on wide
+displays). Respects `prefers-color-scheme` for light/dark.
+
+Colors in terminal output honour `NO_COLOR` and `FORCE_COLOR` automatically.
 
 ### Exit codes
 
