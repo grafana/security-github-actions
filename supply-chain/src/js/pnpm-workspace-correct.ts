@@ -1,23 +1,18 @@
 import { join } from 'node:path';
 import type { NodeCheck, Finding, NodeRoot, RepoContext } from '../types.ts';
-import { readConfigIfPresent, valueMeetsRequirement } from './_config-helpers.ts';
-import type { CompareMode } from './_config-helpers.ts';
+import { readConfigIfPresent } from './_config-helpers.ts';
 
 export const CHECK_ID = 'pnpm-workspace-correct';
 
 const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/supply-chain/docs/checks/js/pnpm-workspace-correct.md';
 
-// Required keys, expected values, and comparison mode. `minimumReleaseAge` is
-// minutes; higher = more secure, so we accept anything ≥ 4320. The other two
-// are booleans where the literal `true` is the only correct setting.
-// `allowBuilds` and `trustPolicy` are intentionally not required — different
-// teams will have different lists; the doc allows both keys but doesn't
-// mandate specific contents.
-const REQUIRED: ReadonlyArray<{ key: string; expected: string; mode: CompareMode }> = [
-  { key: 'minimumReleaseAge', expected: '4320', mode: 'min-int' },
-  { key: 'strictDepBuilds', expected: 'true', mode: 'eq' },
-  { key: 'blockExoticSubdeps', expected: 'true', mode: 'eq' },
-];
+// PR1 scope: only `strictDepBuilds: true` is enforced. This is pnpm's analog
+// of npm's `ignore-scripts=true` / yarn's `enableScripts: false` — it upgrades
+// pnpm's default "warn on unknown postinstall builder" to a hard install
+// failure. `minimumReleaseAge` and `blockExoticSubdeps` ship in a follow-up
+// PR. `allowBuilds` and `trustPolicy` remain optional / team-specific.
+const REQUIRED_KEY = 'strictDepBuilds';
+const REQUIRED_VALUE = 'true';
 
 export const check: NodeCheck = {
   ecosystem: 'js',
@@ -28,54 +23,41 @@ export const check: NodeCheck = {
 
     const relPath = root.path === '.' ? 'pnpm-workspace.yaml' : `${root.path}/pnpm-workspace.yaml`;
     const text = await readConfigIfPresent(join(ctx.repoRoot, relPath));
+
     if (text === null) {
-      return REQUIRED.map((r) =>
-        missing(root.path, relPath, r.key, r.expected, `pnpm-workspace.yaml is missing at ${relPath}.`),
-      );
+      return [missing(root.path, relPath, `pnpm-workspace.yaml is missing at ${relPath}.`)];
     }
 
     const top = parseTopLevelYamlScalars(text);
-    const findings: Finding[] = [];
-    for (const { key, expected, mode } of REQUIRED) {
-      const actual = top.get(key);
-      if (actual === undefined) {
-        findings.push(missing(root.path, relPath, key, expected, `${relPath} does not set ${key}.`));
-      } else if (!valueMeetsRequirement(actual, expected, mode)) {
-        const title =
-          mode === 'min-int'
-            ? `\`${key}\` below minimum in ${relPath} (got ${actual}, want >= ${expected})`
-            : `\`${key}\` has wrong value in ${relPath} (got ${actual}, want ${expected})`;
-        const detail =
-          mode === 'min-int'
-            ? `Expected \`${key}: ${expected}\` or higher, found \`${key}: ${actual}\` in ${relPath}.`
-            : `Expected \`${key}: ${expected}\`, found \`${key}: ${actual}\` in ${relPath}.`;
-        const fix =
-          mode === 'min-int'
-            ? `Set \`${key}: ${expected}\` (or higher) in ${relPath}.`
-            : `Set \`${key}: ${expected}\` in ${relPath}.`;
-        findings.push({
+    const actual = top.get(REQUIRED_KEY);
+    if (actual === undefined) {
+      return [missing(root.path, relPath, `${relPath} does not set ${REQUIRED_KEY}.`)];
+    }
+    if (actual !== REQUIRED_VALUE) {
+      return [
+        {
           check_id: CHECK_ID,
           severity: 'critical',
           root: root.path,
-          title,
-          detail,
-          fix,
+          title: `\`${REQUIRED_KEY}\` has wrong value in ${relPath} (got ${actual}, want ${REQUIRED_VALUE})`,
+          detail: `Expected \`${REQUIRED_KEY}: ${REQUIRED_VALUE}\`, found \`${REQUIRED_KEY}: ${actual}\` in ${relPath}. Without this, pnpm only warns (not fails) when a package wants to run a postinstall builder script — making it easy to miss in CI.`,
+          fix: `Set \`${REQUIRED_KEY}: ${REQUIRED_VALUE}\` in ${relPath}.`,
           doc_link: DOC_LINK,
-        });
-      }
+        },
+      ];
     }
-    return findings;
+    return [];
   },
 };
 
-function missing(root: string, relPath: string, key: string, expected: string, detail: string): Finding {
+function missing(root: string, relPath: string, detail: string): Finding {
   return {
     check_id: CHECK_ID,
     severity: 'critical',
     root,
-    title: `\`${key}\` not set in ${relPath}`,
-    detail,
-    fix: `Add \`${key}: ${expected}\` to ${relPath}.`,
+    title: `\`${REQUIRED_KEY}\` not set in ${relPath}`,
+    detail: `${detail} Without this, pnpm only warns (not fails) when a package wants to run a postinstall builder script — making it easy to miss in CI.`,
+    fix: `Add \`${REQUIRED_KEY}: ${REQUIRED_VALUE}\` to ${relPath}.`,
     doc_link: DOC_LINK,
   };
 }

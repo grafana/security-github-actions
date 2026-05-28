@@ -70,7 +70,7 @@ function ttyCallback(stream: NodeJS.WriteStream): ProgressCallback {
       case 'discovery-end': {
         stopSpinner();
         stream.write(CLEAR_LINE);
-        const summary = describeDiscovery(e.jsRoots, e.goRoots);
+        const summary = describeDiscovery(e.jsRoots);
         stream.write(`${c.green('✓')} ${summary} ${c.dim(`(${e.durationMs}ms)`)}\n`);
         liveLine = '';
         return;
@@ -109,7 +109,7 @@ function staticCallback(stream: NodeJS.WriteStream): ProgressCallback {
   return (e: ProgressEvent) => {
     switch (e.kind) {
       case 'discovery-end':
-        stream.write(`  ${describeDiscovery(e.jsRoots, e.goRoots)} (${e.durationMs}ms)\n`);
+        stream.write(`  ${describeDiscovery(e.jsRoots)} (${e.durationMs}ms)\n`);
         return;
       case 'check-start':
         stream.write(`  [${e.index}/${e.total}] ${e.checkId} on ${describeRoot(e.root)}\n`);
@@ -146,12 +146,9 @@ function palette(): Palette {
   };
 }
 
-function describeDiscovery(jsRoots: number, goRoots: number): string {
-  const parts: string[] = [];
-  if (jsRoots > 0) parts.push(`${jsRoots} JS root${jsRoots === 1 ? '' : 's'}`);
-  if (goRoots > 0) parts.push(`${goRoots} Go root${goRoots === 1 ? '' : 's'}`);
-  if (parts.length === 0) return 'no roots';
-  return parts.join(', ');
+function describeDiscovery(jsRoots: number): string {
+  if (jsRoots === 0) return 'no roots';
+  return `${jsRoots} JS root${jsRoots === 1 ? '' : 's'}`;
 }
 
 function describeRoot(root: string): string {

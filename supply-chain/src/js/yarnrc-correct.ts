@@ -1,23 +1,17 @@
 import { join } from 'node:path';
 import type { NodeCheck, Finding, NodeRoot, RepoContext } from '../types.ts';
-import { readConfigIfPresent, valueMeetsRequirement } from './_config-helpers.ts';
-import type { CompareMode } from './_config-helpers.ts';
+import { readConfigIfPresent } from './_config-helpers.ts';
 import { parseTopLevelYamlScalars } from './pnpm-workspace-correct.ts';
 
 export const CHECK_ID = 'yarnrc-correct';
 
 const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/supply-chain/docs/checks/js/yarnrc-correct.md';
 
-// `npmMinimalAgeGate` is minutes — higher = more secure, so we accept ≥ 4320.
-// The two boolean keys must match exactly.
-const REQUIRED: ReadonlyArray<{ key: string; expected: string; mode: CompareMode }> = [
-  { key: 'enableScripts', expected: 'false', mode: 'eq' },
-  { key: 'enableImmutableInstalls', expected: 'true', mode: 'eq' },
-  { key: 'npmMinimalAgeGate', expected: '4320', mode: 'min-int' },
-];
-
-// Even the *presence* of this key is a security risk per the hardening guide.
-const FORBIDDEN_KEY = 'approvedGitRepositories';
+// PR1 scope: only `enableScripts: false` is enforced. `enableImmutableInstalls`,
+// `npmMinimalAgeGate`, and the forbidden `approvedGitRepositories` rule ship
+// in a follow-up PR.
+const REQUIRED_KEY = 'enableScripts';
+const REQUIRED_VALUE = 'false';
 
 export const check: NodeCheck = {
   ecosystem: 'js',
@@ -28,84 +22,41 @@ export const check: NodeCheck = {
 
     const relPath = root.path === '.' ? '.yarnrc.yml' : `${root.path}/.yarnrc.yml`;
     const text = await readConfigIfPresent(join(ctx.repoRoot, relPath));
+
     if (text === null) {
-      return REQUIRED.map((r) =>
-        missing(root.path, relPath, r.key, r.expected, `.yarnrc.yml is missing at ${relPath}.`),
-      );
+      return [missing(root.path, relPath, `.yarnrc.yml is missing at ${relPath}.`)];
     }
 
-    const findings: Finding[] = [];
     const top = parseTopLevelYamlScalars(text);
-    for (const { key, expected, mode } of REQUIRED) {
-      const actual = top.get(key);
-      if (actual === undefined) {
-        findings.push(missing(root.path, relPath, key, expected, `${relPath} does not set ${key}.`));
-      } else if (!valueMeetsRequirement(actual, expected, mode)) {
-        const title =
-          mode === 'min-int'
-            ? `\`${key}\` below minimum in ${relPath} (got ${actual}, want >= ${expected})`
-            : `\`${key}\` has wrong value in ${relPath} (got ${actual}, want ${expected})`;
-        const detail =
-          mode === 'min-int'
-            ? `Expected \`${key}: ${expected}\` or higher, found \`${key}: ${actual}\` in ${relPath}.`
-            : `Expected \`${key}: ${expected}\`, found \`${key}: ${actual}\` in ${relPath}.`;
-        const fix =
-          mode === 'min-int'
-            ? `Set \`${key}: ${expected}\` (or higher) in ${relPath}.`
-            : `Set \`${key}: ${expected}\` in ${relPath}.`;
-        findings.push({
+    const actual = top.get(REQUIRED_KEY);
+    if (actual === undefined) {
+      return [missing(root.path, relPath, `${relPath} does not set ${REQUIRED_KEY}.`)];
+    }
+    if (actual !== REQUIRED_VALUE) {
+      return [
+        {
           check_id: CHECK_ID,
           severity: 'critical',
           root: root.path,
-          title,
-          detail,
-          fix,
+          title: `\`${REQUIRED_KEY}\` has wrong value in ${relPath} (got ${actual}, want ${REQUIRED_VALUE})`,
+          detail: `Expected \`${REQUIRED_KEY}: ${REQUIRED_VALUE}\`, found \`${REQUIRED_KEY}: ${actual}\` in ${relPath}. Without this, every \`yarn install\` runs arbitrary code from postinstall scripts of any package in the dependency tree.`,
+          fix: `Set \`${REQUIRED_KEY}: ${REQUIRED_VALUE}\` in ${relPath}.`,
           doc_link: DOC_LINK,
-        });
-      }
+        },
+      ];
     }
-
-    if (containsTopLevelKey(text, FORBIDDEN_KEY)) {
-      findings.push({
-        check_id: CHECK_ID,
-        severity: 'critical',
-        root: root.path,
-        title: `\`approvedGitRepositories\` is forbidden in ${relPath}`,
-        detail: `The presence of \`approvedGitRepositories\` allows arbitrary code execution. The hardening guide forbids it even with an empty list.`,
-        fix: `Remove \`approvedGitRepositories\` from ${relPath}.`,
-        doc_link: DOC_LINK,
-      });
-    }
-
-    return findings;
+    return [];
   },
 };
 
-function missing(root: string, relPath: string, key: string, expected: string, detail: string): Finding {
+function missing(root: string, relPath: string, detail: string): Finding {
   return {
     check_id: CHECK_ID,
     severity: 'critical',
     root,
-    title: `\`${key}\` not set in ${relPath}`,
-    detail,
-    fix: `Add \`${key}: ${expected}\` to ${relPath}.`,
+    title: `\`${REQUIRED_KEY}\` not set in ${relPath}`,
+    detail: `${detail} Without this, every \`yarn install\` runs arbitrary code from postinstall scripts of any package in the dependency tree.`,
+    fix: `Add \`${REQUIRED_KEY}: ${REQUIRED_VALUE}\` to ${relPath}.`,
     doc_link: DOC_LINK,
   };
-}
-
-// True if `key:` appears as a top-level (non-indented) key, regardless of
-// whether it has a scalar value, opens a list, or opens a nested mapping.
-function containsTopLevelKey(text: string, key: string): boolean {
-  const re = new RegExp(`^${escapeRegex(key)}\\s*:`, 'm');
-  // Strip comments line-by-line first so a `# approvedGitRepositories:` in a
-  // comment is not a false positive.
-  const stripped = text
-    .split(/\r?\n/)
-    .map((l) => l.replace(/#.*$/, ''))
-    .join('\n');
-  return re.test(stripped);
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

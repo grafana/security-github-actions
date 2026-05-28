@@ -14,11 +14,10 @@ it runs a set of static checks against each "root" (a manifest that is not a
 workspace member). Failures appear in:
 
 - the **GitHub Step Summary** of the workflow run, and
-- a **sticky PR comment** that updates on every push (see [milestone status](#milestones))
+- a **sticky PR comment** that updates on every push
 
 If the workflow says you have a **critical** finding, you must fix it (or
-file a [suppression](#suppressions)) before merge. **Advisory** findings
-appear in the same comment but do not block merging.
+file a [suppression](#suppressions)) before merge.
 
 You can also run the exact same checks on a local clone — no CI needed:
 `cd supply-chain && npm install && npm run check -- /path/to/repo`. See
@@ -26,58 +25,38 @@ You can also run the exact same checks on a local clone — no CI needed:
 
 ## What gets checked
 
+> **Scope note (PR1):** this PR ships a deliberately narrow subset of the
+> org hardening guide — the four checks needed to enforce **post-install-
+> script disabling** across npm, pnpm, and yarn. The remaining JS checks
+> (`lockfile-committed`, `lockfile-conflict`, full versions of the
+> `*-correct` keysets, the heuristic checks, `registry-audit`) and Go
+> support ship in follow-up PRs. See
+> [ADR-0003](./docs/adr/0003-v1-check-scope.md).
+
 ### Critical (fail merge if violated)
 
 | ID | What it checks |
 |---|---|
 | `packagemanager-pinned` | `package.json` declares `packageManager:` at or above the minimum version. |
-| `lockfile-committed` | The lockfile for the declared package manager exists and is committed. |
-| `lockfile-conflict` | A root contains at most one lockfile (no half-finished migrations). |
-| `npmrc-correct` | npm roots have a complete `.npmrc` with `ignore-scripts`, `allow-git`, `min-release-age`. |
-| `pnpm-workspace-correct` | pnpm roots have `pnpm-workspace.yaml` with `minimumReleaseAge`, `strictDepBuilds`, `blockExoticSubdeps`. |
-| `yarnrc-correct` | yarn roots have `.yarnrc.yml` with `enableScripts: false`, `enableImmutableInstalls`, `npmMinimalAgeGate`, and no `approvedGitRepositories`. |
+| `npmrc-correct` | npm roots have `.npmrc` with `ignore-scripts=true`. |
+| `pnpm-workspace-correct` | pnpm roots have `pnpm-workspace.yaml` with `strictDepBuilds: true`. |
+| `yarnrc-correct` | yarn roots have `.yarnrc.yml` with `enableScripts: false`. |
 
-### Advisory (PR comment only, never blocks merge)
-
-| ID | What it checks |
-|---|---|
-| `install-not-ci` | Workflows / Dockerfiles / Tiltfile / Makefile / mise.toml / shell scripts use the lockfile-strict install command (`npm ci`, `--frozen-lockfile`, `--immutable`). |
-| `npx-confusion` | `npx <name>` invocations use either an allowlisted bare name, a scoped name, or `--package`. |
-| `oidc-publishing` | Workflows that call `npm/pnpm/yarn publish` use OIDC trusted publishing (`id-token: write`, no long-lived tokens). |
-| `cache-poisoning-publish` | Publishing workflows disable `actions/setup-node`'s package-manager cache. |
-| `registry-audit` | Surfaces high/critical advisories from `npm/pnpm/yarn audit`. |
-
-### Go (both ecosystems run in the same workflow)
-
-| ID | Severity | What it checks |
-|---|---|---|
-| `gosum-committed` | critical | `go.sum` is present + tracked by git for any module with `require` entries. |
-| `go-toolchain-pinned` | critical | `go.mod` declares a `toolchain` directive at Go ≥ 1.22.0; `go` directive also ≥ 1.22.0. |
-| `govulncheck-clean` | advisory | Surfaces **call-reachable** vulnerabilities from `govulncheck -json` (only flags vulns your code actually executes — not noisy graph-level reports). |
-
-See [docs/checks/](./docs/checks/) for the per-check fix guide. Each finding
-in the PR comment links to its check's doc page directly. The ecosystem
-split rationale lives in [ADR-0009](./docs/adr/0009-add-go-support.md).
+See [docs/checks/js/](./docs/checks/js/) for the per-check fix guide. Each
+finding in the PR comment links to its check's doc page directly.
 
 ## How activation works
 
 The workflow applies the **activation gate** before running anything:
 
-- If your repo has **no `package.json` and no `go.mod`** anywhere, the
-  workflow exits clean. Repos in other ecosystems (Python, Rust, etc.)
-  pass through silently.
-- If either signal is found, the workflow walks the tree, classifies each
-  manifest / module as a **root** or a **workspace member**, and runs the
-  ecosystem-appropriate checks against the roots only.
+- If your repo has **no `package.json`** anywhere, the workflow exits clean.
+  Repos in other ecosystems (Python, Go, Rust, etc.) pass through silently.
+- If `package.json` is found, the workflow walks the tree, classifies each
+  manifest as a **root** or a **workspace member**, and runs the checks
+  against the roots only.
 
 In JS monorepos (npm/yarn `"workspaces"` or `pnpm-workspace.yaml`), only
 the workspace root receives root-level checks. Workspace members do not.
-In Go monorepos, `go.work` plays the same role — modules declared via
-`use ./moduleX` are workspace members of the `go.work` root.
-
-A repository can contain **both** ecosystems (e.g. a Go service with a
-small JS UI). Both walkers run; each set of checks applies to its own
-roots independently.
 
 ## Suppressions
 
@@ -86,17 +65,14 @@ commit `.github/supply-chain.yml` listing the check IDs you want to suppress:
 
 ```yaml
 suppressions:
-  - check_id: lockfile-committed
-    reason: "Upstream vendor doesn't ship a lockfile; we mirror as-is."
+  - check_id: npmrc-correct
+    reason: "Vendored upstream config conflicts; tracked in <ticket>."
     expires: 2026-12-31   # optional but encouraged — past this date the suppression is ignored
 ```
 
 Suppressed findings still appear in the PR comment under the **Suppressed**
 section. They are never silently dropped, and the suppression file itself is
 audited in git history.
-
-> **Note:** the suppression mechanism is **specified but not yet implemented**.
-> See [milestone status](#milestones) below.
 
 ## Excluding paths from the walker
 
@@ -109,22 +85,6 @@ one directory prefix per line:
 # Throwaway fixture manifests used only by unit tests.
 tests/fixtures
 ```
-
-## What I want to ship vs. what I'm shipping today
-
-### Milestones
-
-The workflow ships incrementally. Where each capability is on the curve:
-
-| Capability | Status |
-|---|---|
-| Workspace-aware walker | ✅ shipped |
-| All critical checks | ✅ shipped |
-| Heuristic advisory checks (`install-not-ci`, `npx-confusion`, `oidc-publishing`, `cache-poisoning-publish`) | ✅ shipped |
-| Workflow file at `.github/workflows/supply-chain.yaml` | ✅ shipped |
-| Sticky PR comment | ✅ shipped |
-| Suppression mechanism (`.github/supply-chain.yml`) | ✅ shipped |
-| `registry-audit` advisory (run `npm/pnpm/yarn audit` in a dedicated job, merged into the unified comment) | ✅ shipped |
 
 ## Running it locally (against a local clone, no CI required)
 
@@ -148,9 +108,6 @@ npm run check
 
 # Check a specific local clone:
 npm run check -- /path/to/some/other/repo
-
-# Skip the network-dependent registry-audit check (faster, works offline):
-npm run check -- --no-audit /path/to/some/repo
 ```
 
 ### Output format
@@ -186,7 +143,7 @@ Colors in terminal output honour `NO_COLOR` and `FORCE_COLOR` automatically.
 
 ### Exit codes
 
-- **0** — no critical findings (advisory findings are allowed and printed)
+- **0** — no critical findings
 - **1** — at least one critical finding
 - **2** — unexpected error (parse crash, etc.)
 
@@ -201,12 +158,9 @@ for repo in $(gh repo list grafana --limit 100 --json nameWithOwner -q '.[].name
     gh repo clone "$repo" "${repo##*/}" -- --depth 1 2>/dev/null || continue
     echo "=== $repo ==="
     ( cd ~/dev/security-github-actions/supply-chain && \
-      npm run check --silent -- --no-audit "/tmp/sc-scan/${repo##*/}" ) | head -30
+      npm run check --silent -- "/tmp/sc-scan/${repo##*/}" ) | head -30
 done
 ```
-
-`--no-audit` is recommended for surveys: it keeps the loop fast and avoids
-hammering the registry with audit requests.
 
 ## For developers of this tool
 
@@ -214,15 +168,11 @@ hammering the registry with audit requests.
 cd supply-chain
 node --version            # must be >= 24.5.0
 npm install               # devDependencies only (typescript, @types/node)
-npm test                  # 75 fixture-driven unit tests
+npm test                  # fixture-driven unit tests
 npm run check             # dogfood against the surrounding repo
 ```
 
 ### Layout
-
-The repo is split by ecosystem. The top level of each of `src/`, `tests/`,
-and `docs/checks/` holds only **ecosystem-agnostic** code (engine, report,
-suppressions, …); ecosystem-specific code lives under `js/` or `go/`.
 
 ```
 supply-chain/
@@ -232,87 +182,60 @@ supply-chain/
   tsconfig.json
   src/
     # reusable
-    types.ts              # Finding, Check, Root, RepoContext (discriminated union)
+    types.ts              # Finding, Check, Root, RepoContext
     engine.ts             # walk + run checks + apply suppressions
     report.ts             # markdown renderer
     text-report.ts        # terminal renderer
     check.ts              # single CLI entry point (used in CI + locally)
     registry.ts           # single source of truth for which checks exist
-    io.ts, render-cli.ts, post-comment.ts, suppressions.ts
-    # JS-specific
+    io.ts, render-cli.ts, post-comment.ts, suppressions.ts, progress.ts
+    # JS-specific (a follow-up PR adds src/go/ alongside)
     js/
       walk.ts             # discoverJsRoots()
-      scanner.ts          # workflow/Dockerfile/etc. scanner for heuristic checks
-      _audit-parse.ts, _config-helpers.ts
-      lockfile-committed.ts, npmrc-correct.ts, …
-    # Go-specific
-    go/
-      walk.ts             # discoverGoRoots()
-      _govulncheck-parse.ts
-      gosum-committed.ts, toolchain-pinned.ts, govulncheck-clean.ts
+      _config-helpers.ts
+      packagemanager-pinned.ts
+      npmrc-correct.ts
+      pnpm-workspace-correct.ts
+      yarnrc-correct.ts
   tests/
-    # reusable
-    io.test.ts, suppressions.test.ts, text-report.test.ts
     js/
-      walk.test.ts, lockfile-committed.test.ts, audit-parse.test.ts, …
-      fixtures/<check>/<good|bad-*>/...
-    go/
-      walk.test.ts, checks.test.ts, govulncheck-parse.test.ts
+      walk.test.ts, packagemanager-pinned.test.ts, …
       fixtures/<check>/<good|bad-*>/...
   docs/
-    adr/                  # architecture decision records (cross-ecosystem)
+    adr/                  # architecture decision records
     checks/
       js/<check_id>.md    # per-check fix guide
-      go/<check_id>.md
 ```
 
 ### Workflow architecture (3 jobs, 1 CLI)
 
-The workflow runs three jobs that fan-in to a single sticky comment, all driven
-by **the same** `src/check.ts` invoked with different mode flags:
+PR1 ships two real jobs (`static` + `report`) gated by the `detect`
+activation gate; a follow-up PR adds an `audit` job for the
+network-dependent `registry-audit` check.
 
 ```
-              ┌─────────────────────────────────────┐  static-findings.json
-              │ static                               │
-              │   check.ts --no-audit                │──────────────┐
-              │   (critical → exit 1)                │              │
-              └─────────────────────────────────────┘              ▼
-detect ──┬─►                                                 ┌──────────┐
-         │    ┌─────────────────────────────────────┐        │ report   │
-         │    │ audit                                │  audit │          │
-         └─►  │   check.ts --audit-only              │──────► │          │
-              │   (continue-on-error: true)          │        └──────────┘
-              └─────────────────────────────────────┘        render-cli.ts
-                                                              + post-comment.ts
+detect ──► static ──► report
+              check.ts             render-cli.ts + post-comment.ts
+              (critical → exit 1)
 ```
 
-- **`static`** runs `check.ts --no-audit`. Every non-network check across all roots. Its **non-zero exit on critical findings is what fails the workflow** and gates merge. Writes `static-findings.json`.
-- **`audit`** runs `check.ts --audit-only`. Only `registry-audit`. **Always advisory** at the job level (`continue-on-error: true` — ADR-0001). Writes `audit-findings.json`.
-- **`report`** depends on `[static, audit]` with `if: always()`. Downloads both artifacts, runs `render-cli.ts` to merge the payloads and produce one markdown body, then `post-comment.ts` posts/updates the sticky PR comment.
+- **`detect`** — cheap activation gate; skips the rest if no `package.json`.
+- **`static`** — runs all critical checks across all roots. Non-zero exit on critical findings is what fails the workflow and gates merge. Writes `static-findings.json`.
+- **`report`** — `if: always()` on `static`. Downloads the artifact, renders the markdown body via `render-cli.ts`, posts/updates the sticky PR comment via `post-comment.ts`.
 
-The same `check.ts` (with no flags) is what runs locally via `npm run check`. CI mode vs local mode is determined entirely by environment variables: if `SUPPLY_CHAIN_FINDINGS_OUT` or `GITHUB_STEP_SUMMARY` is set, it writes to those; otherwise it prints the rendered markdown to stdout.
+The same `check.ts` is what runs locally via `npm run check`. CI mode vs
+local mode is determined by environment variables: if
+`SUPPLY_CHAIN_FINDINGS_OUT` is set, it writes the JSON payload; otherwise it
+prints the rendered report to stdout.
 
 ### Adding a new check
 
-The ecosystem of the new check (`js` or `go`) determines which subdirectory
-each artifact lands in. Substitute `<eco>` accordingly below.
-
-1. Decide the `check_id` — it is **append-only** once shipped. Suppressions
-   reference it by string forever. See [ADR-0005](./docs/adr/0005-suppression-as-in-repo-config.md).
-2. Add `src/<eco>/<check_id>.ts` exporting `check: NodeCheck` or `check: GoCheck`,
-   with `ecosystem: '<eco>'`.
-3. Add fixtures under `tests/<eco>/fixtures/<check_id>/` — at least one
-   `good-*` and one `bad-*`. The fixtures must be real directory trees; the
-   test invokes the ecosystem-appropriate `discoverJsRoots` /
-   `discoverGoRoots` against them and feeds the resulting root into `check.run`.
-4. Add `tests/<eco>/<check_id>.test.ts` asserting the findings count, the
-   `check_id`, and key message fragments. Test against *behavior* (returned
-   findings), not *implementation* (specific source strings).
-5. Register the check in `src/registry.ts`'s `STATIC_CHECKS` or
-   `AUDIT_CHECKS` array.
-6. Write `docs/checks/<eco>/<check_id>.md` — this is what the finding's
-   `doc_link` points at. Should explain: what failed, why we check it, and
-   the precise fix.
+1. Decide the `check_id` — it is **append-only** once shipped. Suppressions reference it by string forever. See [ADR-0005](./docs/adr/0005-suppression-as-in-repo-config.md).
+2. Add `src/js/<check_id>.ts` exporting `check: NodeCheck` with `ecosystem: 'js'`.
+3. Add fixtures under `tests/js/fixtures/<check_id>/` — at least one `good-*` and one `bad-*`. The fixtures must be real directory trees; the test invokes `discoverJsRoots` against them and feeds the resulting root into `check.run`.
+4. Add `tests/js/<check_id>.test.ts` asserting the findings count, the `check_id`, and key message fragments. Test against *behavior* (returned findings), not *implementation* (specific source strings).
+5. Register the check in `src/registry.ts`'s `ALL_CHECKS` array.
+6. Write `docs/checks/js/<check_id>.md` — this is what the finding's `doc_link` points at. Should explain: what failed, why we check it, and the precise fix.
 
 ### Design decisions
 
@@ -324,9 +247,8 @@ contract with the org.
 
 The workflow is **not** referenced by the org ruleset yet. The rollout plan:
 
-1. Land milestones 1–3 (all critical checks + suppression).
-2. Run a one-off pre-flight: clone the top-N org repos and run the CLI
-   against each from a developer laptop. Tally findings.
+1. Land PR1 (post-install-script enforcement) + follow-up PRs (rest of JS, then Go).
+2. Run a one-off pre-flight: clone the top-N org repos and run the CLI against each from a developer laptop. Tally findings.
 3. Communicate the findings to affected teams with a deadline.
 4. After deadline, add `supply-chain.yaml@main` to the org ruleset.
 

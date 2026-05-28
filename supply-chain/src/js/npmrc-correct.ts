@@ -1,21 +1,15 @@
 import { join } from 'node:path';
 import type { NodeCheck, Finding, NodeRoot, RepoContext } from '../types.ts';
-import { readConfigIfPresent, parseLineConfig, valueMeetsRequirement } from './_config-helpers.ts';
-import type { CompareMode } from './_config-helpers.ts';
+import { readConfigIfPresent, parseLineConfig } from './_config-helpers.ts';
 
 export const CHECK_ID = 'npmrc-correct';
 
 const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/supply-chain/docs/checks/js/npmrc-correct.md';
 
-// Required keys, their expected values, and how to compare them.
-// `min-release-age` is days; higher = more secure, so it uses `min-int`.
-// The other two are enum/boolean values where exact match is the only
-// correct setting.
-const REQUIRED: ReadonlyArray<{ key: string; expected: string; mode: CompareMode }> = [
-  { key: 'ignore-scripts', expected: 'true', mode: 'eq' },
-  { key: 'allow-git', expected: 'none', mode: 'eq' },
-  { key: 'min-release-age', expected: '3', mode: 'min-int' },
-];
+// PR1 scope: only `ignore-scripts=true` is enforced.
+// `allow-git=none` and `min-release-age=3` ship in a follow-up PR.
+const REQUIRED_KEY = 'ignore-scripts';
+const REQUIRED_VALUE = 'true';
 
 export const check: NodeCheck = {
   ecosystem: 'js',
@@ -26,62 +20,41 @@ export const check: NodeCheck = {
 
     const relPath = root.path === '.' ? '.npmrc' : `${root.path}/.npmrc`;
     const text = await readConfigIfPresent(join(ctx.repoRoot, relPath));
+
     if (text === null) {
-      // No .npmrc at all => one finding per required key, so the developer
-      // sees exactly what to add.
-      return REQUIRED.map((r) =>
-        missingKeyFinding(root.path, relPath, r.key, r.expected, `.npmrc is missing at ${relPath}`),
-      );
+      return [missing(root.path, relPath, `.npmrc is missing at ${relPath}.`)];
     }
 
     const config = parseLineConfig(text);
-    const findings: Finding[] = [];
-    for (const { key, expected, mode } of REQUIRED) {
-      const actual = config.get(key);
-      if (actual === undefined) {
-        findings.push(missingKeyFinding(root.path, relPath, key, expected, `${relPath} does not set ${key}.`));
-      } else if (!valueMeetsRequirement(actual, expected, mode)) {
-        const title =
-          mode === 'min-int'
-            ? `\`${key}\` below minimum in ${relPath} (got ${actual}, want >= ${expected})`
-            : `\`${key}\` has wrong value in ${relPath} (got ${actual}, want ${expected})`;
-        const detail =
-          mode === 'min-int'
-            ? `Expected \`${key}=${expected}\` or higher, found \`${key}=${actual}\` in ${relPath}.`
-            : `Expected \`${key}=${expected}\`, found \`${key}=${actual}\` in ${relPath}.`;
-        const fix =
-          mode === 'min-int'
-            ? `Set \`${key}=${expected}\` (or higher) in ${relPath}.`
-            : `Set \`${key}=${expected}\` in ${relPath}.`;
-        findings.push({
+    const actual = config.get(REQUIRED_KEY);
+    if (actual === undefined) {
+      return [missing(root.path, relPath, `${relPath} does not set ${REQUIRED_KEY}.`)];
+    }
+    if (actual !== REQUIRED_VALUE) {
+      return [
+        {
           check_id: CHECK_ID,
           severity: 'critical',
           root: root.path,
-          title,
-          detail,
-          fix,
+          title: `\`${REQUIRED_KEY}\` has wrong value in ${relPath} (got ${actual}, want ${REQUIRED_VALUE})`,
+          detail: `Expected \`${REQUIRED_KEY}=${REQUIRED_VALUE}\`, found \`${REQUIRED_KEY}=${actual}\` in ${relPath}. Without this, every \`npm install\` runs arbitrary code from postinstall scripts of any package in the dependency tree — the dominant npm supply-chain attack vector.`,
+          fix: `Set \`${REQUIRED_KEY}=${REQUIRED_VALUE}\` in ${relPath}.`,
           doc_link: DOC_LINK,
-        });
-      }
+        },
+      ];
     }
-    return findings;
+    return [];
   },
 };
 
-function missingKeyFinding(
-  root: string,
-  relPath: string,
-  key: string,
-  expected: string,
-  detail: string,
-): Finding {
+function missing(root: string, relPath: string, detail: string): Finding {
   return {
     check_id: CHECK_ID,
     severity: 'critical',
     root,
-    title: `\`${key}\` not set in ${relPath}`,
-    detail,
-    fix: `Add \`${key}=${expected}\` to ${relPath}.`,
+    title: `\`${REQUIRED_KEY}\` not set in ${relPath}`,
+    detail: `${detail} Without this, every \`npm install\` runs arbitrary code from postinstall scripts of any package in the dependency tree — the dominant npm supply-chain attack vector.`,
+    fix: `Add \`${REQUIRED_KEY}=${REQUIRED_VALUE}\` to ${relPath}.`,
     doc_link: DOC_LINK,
   };
 }

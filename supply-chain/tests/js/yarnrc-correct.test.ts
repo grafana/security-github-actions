@@ -18,47 +18,22 @@ async function runFor(fixture: string) {
   return check.run(roots[0]!, ctx);
 }
 
-test('good: passes', async () => {
+test('good: enableScripts: false => no findings', async () => {
   assert.deepEqual(await runFor('good'), []);
 });
 
-test('good-above-required: npmMinimalAgeGate higher than required is accepted (stricter = ok)', async () => {
-  assert.deepEqual(await runFor('good-above-required'), []);
-});
-
-test('bad-missing: missing .yarnrc.yml => 3 findings', async () => {
+test('bad-missing: missing .yarnrc.yml => single finding', async () => {
   const findings = await runFor('bad-missing');
-  assert.equal(findings.length, 3);
-  for (const f of findings) assert.equal(f.check_id, CHECK_ID);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0]!.check_id, CHECK_ID);
+  assert.match(findings[0]!.title, /enableScripts/);
 });
 
-test('bad-missing-keys: 2 missing-key findings', async () => {
-  const findings = await runFor('bad-missing-keys');
-  assert.equal(findings.length, 2);
-});
-
-test('bad-wrong-value: 3 findings — two wrong-value, one below-minimum (npmMinimalAgeGate)', async () => {
+test('bad-wrong-value: enableScripts: true => single wrong-value finding', async () => {
   const findings = await runFor('bad-wrong-value');
-  assert.equal(findings.length, 3);
-  for (const f of findings) assert.match(f.title, /wrong value|below minimum/);
-  const ageFinding = findings.find((f) => f.title.includes('npmMinimalAgeGate'));
-  assert.ok(ageFinding, 'expected a finding for npmMinimalAgeGate');
-  assert.match(ageFinding!.title, /below minimum/);
-});
-
-test('bad-forbidden-key: approvedGitRepositories present with values => 1 finding', async () => {
-  const findings = await runFor('bad-forbidden-key');
   assert.equal(findings.length, 1);
-  assert.match(findings[0]!.title, /approvedGitRepositories/);
-});
-
-test('bad-forbidden-key-empty-list: even an empty list trips the check', async () => {
-  const findings = await runFor('bad-forbidden-key-empty-list');
-  assert.equal(findings.length, 1);
-});
-
-test('good-comment-mentions-forbidden: comments do not trigger the forbidden-key rule', async () => {
-  assert.deepEqual(await runFor('good-comment-mentions-forbidden'), []);
+  assert.match(findings[0]!.title, /wrong value/);
+  assert.match(findings[0]!.title, /enableScripts/);
 });
 
 test('not-yarn-root: skips the check', async () => {

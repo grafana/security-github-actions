@@ -14,13 +14,3 @@ rules:
         # https://nvd.nist.gov/vuln/detail/cve-2025-30066
         # https://nvd.nist.gov/vuln/detail/cve-2025-30154
         - reviewdog/*
-# The supply-chain CLI ships intentionally-broken test fixtures under
-# supply-chain/tests/js/fixtures/. Those fixtures contain patterns we WANT
-# our own checks to detect (cache-poisoning, missing OIDC, install-not-ci,
-# npx confusion). Zizmor correctly finds the same patterns and would flag
-# every fixture as a real vulnerability.
-#
-# The grafana shared-workflows zizmor pipeline replaces this repo-local
-# config with a centralized one before running, so a rule-level `ignore:`
-# block here is ignored. Suppression is done inline with
-# `# zizmor: ignore[<rule>]` comments inside the fixture files themselves.

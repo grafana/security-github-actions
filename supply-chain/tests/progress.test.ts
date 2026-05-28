@@ -19,11 +19,10 @@ class CaptureStream {
   // The rest of NodeJS.WriteStream — we only ever touch write + isTTY.
 }
 
-test('describeDiscovery: singular vs plural, missing ecosystems', () => {
-  assert.equal(__test.describeDiscovery(1, 0), '1 JS root');
-  assert.equal(__test.describeDiscovery(3, 2), '3 JS roots, 2 Go roots');
-  assert.equal(__test.describeDiscovery(0, 1), '1 Go root');
-  assert.equal(__test.describeDiscovery(0, 0), 'no roots');
+test('describeDiscovery: singular vs plural', () => {
+  assert.equal(__test.describeDiscovery(1), '1 JS root');
+  assert.equal(__test.describeDiscovery(3), '3 JS roots');
+  assert.equal(__test.describeDiscovery(0), 'no roots');
 });
 
 test('formatDuration: ms / sub-10s / 10s+ buckets', () => {
@@ -44,7 +43,7 @@ test('non-TTY callback: writes static lines for check-start and slow check-end',
   const cb = makeProgressCallback(s as unknown as NodeJS.WriteStream);
   const events: ProgressEvent[] = [
     { kind: 'discovery-start' },
-    { kind: 'discovery-end', jsRoots: 1, goRoots: 0, durationMs: 42 },
+    { kind: 'discovery-end', jsRoots: 1, durationMs: 42 },
     { kind: 'check-start', checkId: 'lockfile-committed', root: '.', index: 1, total: 2 },
     { kind: 'check-end', checkId: 'lockfile-committed', root: '.', durationMs: 12, findingCount: 0 },
     { kind: 'check-start', checkId: 'registry-audit', root: '.', index: 2, total: 2 },

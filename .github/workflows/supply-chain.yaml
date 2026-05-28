@@ -3,13 +3,14 @@
 #
 # Architecture (see supply-chain/docs/adr/0001 and 0007):
 #   1. `detect`   — cheap activation gate. Skips the rest if no package.json.
-#   2. `static`   — runs all critical + non-network advisory checks. Its
-#                   non-zero exit on critical findings is what gates merge.
-#   3. `audit`    — runs the network-dependent registry-audit check. Always
-#                   advisory; continue-on-error is load-bearing per ADR-0001.
-#   4. `report`   — depends on `static` + `audit` (with `if: always()`),
-#                   merges the two JSON payloads, and posts the single
-#                   unified sticky PR comment.
+#   2. `static`   — runs all critical checks. Its non-zero exit on
+#                   critical findings is what gates merge.
+#   3. `report`   — depends on `static` (with `if: always()`), renders the
+#                   findings JSON, and posts the single sticky PR comment.
+#
+# PR1 ships only the post-install-script-disabling checks. A follow-up
+# PR adds an `audit:` job for network-dependent scanners (npm/pnpm/yarn
+# audit).
 name: Supply-chain hardening
 
 permissions: {}
@@ -39,18 +40,17 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           persist-credentials: false
-      - name: Look for package.json or go.mod
+      - name: Look for package.json
         id: detect
         shell: bash
         run: |
-          # We support two ecosystems (JS + Go). The activation gate fires if
-          # either signal is present; otherwise the workflow exits clean so
-          # the org ruleset doesn't noisily fail on repos using neither.
+          # The activation gate fires if any `package.json` exists outside
+          # the obvious skip dirs. Otherwise the workflow exits clean so the
+          # org ruleset doesn't noisily fail on repos that don't use Node.
           if find . \
               -path './node_modules' -prune -o \
               -path './.git' -prune -o \
-              -path './vendor' -prune -o \
-              \( -name 'package.json' -o -name 'go.mod' \) -print -quit \
+              -name 'package.json' -print -quit \
               | grep -q .; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
@@ -97,7 +97,7 @@ jobs:
         # continue-on-error so the artifact upload still runs even when there
         # are critical findings; the "Enforce" step re-fails the job below.
         continue-on-error: true
-        run: node --experimental-strip-types src/check.ts --no-audit "$GITHUB_WORKSPACE/target"
+        run: node --experimental-strip-types src/check.ts "$GITHUB_WORKSPACE/target"
 
       - name: Upload static findings
         # `runner.temp` lives outside GITHUB_WORKSPACE; hashFiles() can only
@@ -118,82 +118,17 @@ jobs:
         # The CLI step uses `continue-on-error: true` so the artifact upload
         # above can run unconditionally, even when there are critical
         # findings — without this final step, a failing CLI would mark the
-        # whole job green, which would silently allow merges with critical-severity
-        # findings present.
+        # whole job green, which would silently allow merges with
+        # critical-severity findings present.
         if: ${{ steps.cli.outcome == 'failure' }}
         run: exit 1
-
-  audit:
-    name: Registry audit (advisory)
-    needs: detect
-    if: ${{ needs.detect.outputs.found == 'true' }}
-    runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
-    continue-on-error: true # load-bearing: see ADR-0001
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout target repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-        with:
-          path: target
-          persist-credentials: false
-
-      - name: Checkout security-github-actions
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-        with:
-          # Self-PRs to this repo run with whatever CLI is on the PR's
-          # head (so changes to supply-chain/ are tested by the PR that
-          # changes them). All other contexts — push to main, required-
-          # workflow runs on other repos — use main.
-          repository: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.repo.full_name) || 'grafana/security-github-actions' }}
-          ref: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.sha) || 'main' }}
-          path: security-github-actions
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: '24'
-
-      # The audit job runs both ecosystems' scanners (`npm/pnpm/yarn audit`
-      # for JS, `govulncheck` for Go). `pnpm` / `yarn` are not on the
-      # GitHub runner image by default — Corepack (bundled with Node) can
-      # enable both on demand. Setting up Go + installing govulncheck is
-      # cheap unconditionally; if the target has no Go modules,
-      # govulncheck simply isn't invoked.
-      - name: Enable Corepack (pnpm + yarn)
-        run: corepack enable
-
-      - name: Setup Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version: '1.24'
-
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
-      - name: Run audit
-        working-directory: security-github-actions/supply-chain
-        env:
-          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          SUPPLY_CHAIN_FINDINGS_OUT: ${{ runner.temp }}/audit-findings.json
-        run: node --experimental-strip-types src/check.ts --audit-only "$GITHUB_WORKSPACE/target"
-
-      - name: Upload audit findings
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: supply-chain-audit-findings
-          path: ${{ runner.temp }}/audit-findings.json
-          retention-days: 7
-          if-no-files-found: warn
 
   report:
     name: Supply-chain attacks mitigation report
     # `always()` so this runs even when `static` failed (the comment showing
     # the critical findings is the whole point). `detect` must still have
     # found something, otherwise we skip — no comment needed on non-Node repos.
-    needs: [detect, static, audit]
+    needs: [detect, static]
     if: ${{ always() && needs.detect.outputs.found == 'true' }}
     runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
     permissions:
@@ -203,10 +138,6 @@ jobs:
       - name: Checkout security-github-actions
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
-          # Self-PRs to this repo run with whatever CLI is on the PR's
-          # head (so changes to supply-chain/ are tested by the PR that
-          # changes them). All other contexts — push to main, required-
-          # workflow runs on other repos — use main.
           repository: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.repo.full_name) || 'grafana/security-github-actions' }}
           ref: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.sha) || 'main' }}
           path: security-github-actions
@@ -217,9 +148,9 @@ jobs:
         with:
           node-version: '24'
 
-      # Either artifact may legitimately be missing (a job failed entirely
-      # before writing JSON). `if-no-files-found: warn` keeps the step
-      # green; the renderer handles missing inputs gracefully.
+      # The static artifact may legitimately be missing (the static job
+      # failed entirely before writing JSON). `if-no-files-found: warn`
+      # keeps the step green; render-cli handles missing inputs gracefully.
       - name: Download static findings
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -227,22 +158,14 @@ jobs:
           path: ${{ runner.temp }}/payloads
         continue-on-error: true
 
-      - name: Download audit findings
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: supply-chain-audit-findings
-          path: ${{ runner.temp }}/payloads
-        continue-on-error: true
-
-      - name: Render unified report
+      - name: Render report
         working-directory: security-github-actions/supply-chain
         env:
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SUPPLY_CHAIN_COMMENT_OUT: ${{ runner.temp }}/comment.md
         run: |
           node --experimental-strip-types src/render-cli.ts \
-            "${{ runner.temp }}/payloads/static-findings.json" \
-            "${{ runner.temp }}/payloads/audit-findings.json"
+            "${{ runner.temp }}/payloads/static-findings.json"
 
       - name: Post sticky PR comment
         # Skip hashFiles() — runner.temp is outside GITHUB_WORKSPACE so it
