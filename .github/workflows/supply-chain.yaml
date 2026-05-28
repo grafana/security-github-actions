@@ -189,7 +189,7 @@ jobs:
           if-no-files-found: warn
 
   report:
-    name: Supply-chain attacks mitigation
+    name: Supply-chain attacks mitigation report
     # `always()` so this runs even when `static` failed (the comment showing
     # the critical findings is the whole point). `detect` must still have
     # found something, otherwise we skip — no comment needed on non-Node repos.
