@@ -55,5 +55,5 @@ jobs:
       # Reusable workflow gates bench job on org + non-fork PR (OIDC/Vault not available on fork PRs); pass true to opt in.
       send-bench-metrics: true
       auto-delete-dangerous-branches: true
-      auto-delete-slack-channel-id: CHQDPC970
+      auto-delete-slack-channel-id: C011GT1NESU
     secrets: inherit
