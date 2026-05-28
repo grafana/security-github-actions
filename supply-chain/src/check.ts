@@ -18,9 +18,12 @@
 // Behaviour is driven by environment variables:
 //   SUPPLY_CHAIN_FINDINGS_OUT — if set, write a JSON ReportPayload to this
 //                               path (the CI contract; consumed by render-cli)
-//   GITHUB_STEP_SUMMARY       — if set, append the rendered markdown here
-//                               (so the CI job's page shows its findings)
 //   GITHUB_RUN_URL            — link used in the rendered report's footer
+//
+// Note: we do not write GITHUB_STEP_SUMMARY here. The render job
+// (src/render-cli.ts) is the canonical step-summary writer for CI runs;
+// having the static and audit jobs each write their own would produce
+// three near-identical summaries per workflow run.
 //
 // Local default (TTY, no env sinks): full text report on stdout, HTML
 // dropped to ~/.cache/supply-chain/, browser auto-opened. Use --no-html
@@ -145,7 +148,12 @@ async function main(): Promise<void> {
     runUrl: env.GITHUB_RUN_URL ?? buildRunUrl(),
   };
 
-  // CI sinks (env-driven). These do not mix with the local flow below.
+  // CI sink: JSON payload that the render job downloads and merges.
+  // We intentionally do NOT write GITHUB_STEP_SUMMARY here even when it's
+  // set — that would produce a per-job summary (one for static, one for
+  // audit) duplicating what the render job's unified summary already
+  // contains. The render job is the single canonical writer of step
+  // summaries; the static/audit jobs are silent on that surface.
   const findingsOut = env.SUPPLY_CHAIN_FINDINGS_OUT;
   if (findingsOut) {
     await writePayload(findingsOut, {
@@ -155,13 +163,9 @@ async function main(): Promise<void> {
       suppressed: result.suppressed,
     });
   }
-  const summaryFile = env.GITHUB_STEP_SUMMARY;
-  if (summaryFile) {
-    await writeFile(summaryFile, renderMarkdown(reportInput) + '\n', { flag: 'a' });
-  }
 
-  // Local flow (no env-driven sinks).
-  if (!findingsOut && !summaryFile) {
+  // Local flow (no CI sink).
+  if (!findingsOut) {
     const fmt = resolveStdoutFormat(format);
 
     // 1. Render to stdout per the chosen format. `--format=html` in a TTY

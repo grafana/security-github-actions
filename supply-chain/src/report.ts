@@ -29,12 +29,16 @@ export function renderMarkdown(input: ReportInput): string {
       ? `✅ Supply-chain checks passed (${advisory.length} advisory)`
       : `❌ ${blocking.length} blocking, ${advisory.length} advisory`;
 
+  // All sections are collapsed by default. The status line at the top
+  // already shows the counts ("❌ 15 blocking, 2 advisory") which is the
+  // signal a reader scanning the PR comment / step summary needs first;
+  // expanding a section is one click when they want the detail.
   const parts: string[] = [
     STICKY_MARKER,
     `## ${status}`,
     '',
-    section('Blocking violations', blocking, blocking.length > 0),
-    section('Advisory findings', advisory, true),
+    section('Blocking violations', blocking, false),
+    section('Advisory findings', advisory, false),
     section('Suppressed', input.suppressed, false),
     passingSection(input.ran, passingIds),
   ];

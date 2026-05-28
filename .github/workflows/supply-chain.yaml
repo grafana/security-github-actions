@@ -96,15 +96,26 @@ jobs:
         run: node --experimental-strip-types src/check.ts --no-audit "$GITHUB_WORKSPACE/target"
 
       - name: Upload static findings
-        if: ${{ always() && hashFiles(format('{0}/static-findings.json', runner.temp)) != '' }}
+        # `runner.temp` lives outside GITHUB_WORKSPACE; hashFiles() can only
+        # see files inside the workspace, so using it here would always
+        # return empty. Always-attempt + warn-on-missing is the correct
+        # shape; the file should normally be present because the CLI
+        # writes it before exit even on blocking-finding paths.
+        if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: supply-chain-static-findings
           path: ${{ runner.temp }}/static-findings.json
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Enforce CLI exit code
+        # Re-fails the job in lockstep with the CLI's exit code.
+        # The CLI step uses `continue-on-error: true` so the artifact upload
+        # above can run unconditionally, even when there are blocking
+        # findings — without this final step, a failing CLI would mark the
+        # whole job green, which would silently allow merges with blocking
+        # findings present.
         if: ${{ steps.cli.outcome == 'failure' }}
         run: exit 1
 
@@ -137,9 +148,14 @@ jobs:
           node-version: '24'
 
       # The audit job runs both ecosystems' scanners (`npm/pnpm/yarn audit`
-      # for JS, `govulncheck` for Go). Setting up Go + installing
-      # govulncheck unconditionally is cheap; if the target has no Go
-      # modules, govulncheck simply isn't invoked.
+      # for JS, `govulncheck` for Go). `pnpm` / `yarn` are not on the
+      # GitHub runner image by default — Corepack (bundled with Node) can
+      # enable both on demand. Setting up Go + installing govulncheck is
+      # cheap unconditionally; if the target has no Go modules,
+      # govulncheck simply isn't invoked.
+      - name: Enable Corepack (pnpm + yarn)
+        run: corepack enable
+
       - name: Setup Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
@@ -156,16 +172,16 @@ jobs:
         run: node --experimental-strip-types src/check.ts --audit-only "$GITHUB_WORKSPACE/target"
 
       - name: Upload audit findings
-        if: ${{ always() && hashFiles(format('{0}/audit-findings.json', runner.temp)) != '' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: supply-chain-audit-findings
           path: ${{ runner.temp }}/audit-findings.json
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn
 
   report:
-    name: Unified report
+    name: Supply-chain attacks mitigation
     # `always()` so this runs even when `static` failed (the comment showing
     # the blocking findings is the whole point). `detect` must still have
     # found something, otherwise we skip — no comment needed on non-Node repos.
@@ -217,7 +233,10 @@ jobs:
             "${{ runner.temp }}/payloads/audit-findings.json"
 
       - name: Post sticky PR comment
-        if: ${{ github.event_name == 'pull_request' && hashFiles(format('{0}/comment.md', runner.temp)) != '' }}
+        # Skip hashFiles() — runner.temp is outside GITHUB_WORKSPACE so it
+        # always returns empty. post-comment.ts already handles a missing
+        # body file (exits with a clear error).
+        if: ${{ github.event_name == 'pull_request' }}
         working-directory: security-github-actions/supply-chain
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
