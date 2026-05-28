@@ -77,9 +77,10 @@ function section(
         return renderFinding(f, n);
       })
       .join('\n');
+    const displayPath = root === '.' ? './' : `./${root}`;
     groups.push(`
       <div class="root-group">
-        <h3 class="root-name">${esc(root === '.' ? '(repo root)' : root)}</h3>
+        <h3 class="root-name">Directory: <code class="root-path">${esc(displayPath)}</code></h3>
         <div class="finding-grid">${items}</div>
       </div>`);
   }
@@ -233,12 +234,14 @@ const CSS = `
 
   .root-group { margin: 10px 0 16px 0; }
   .root-name {
-    font-size: 0.85em;
+    font-size: 0.9em;
     color: var(--fg-muted);
     margin: 12px 0 6px 0;
+    font-weight: 500;
+  }
+  .root-path {
+    color: var(--fg);
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
   }
 
   /* Finding cards in a responsive grid: 2 columns wide, 1 column narrow. */
