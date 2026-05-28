@@ -34,8 +34,8 @@ From the CLI directory, write JSON findings to a known path:
 
 ```bash
 cd <CLI-DIR>
-mkdir -p ~/.cache/supply-chain-skill
-SUPPLY_CHAIN_FINDINGS_OUT=~/.cache/supply-chain-skill/findings.json \
+mkdir -p ~/.cache/mitigate-supply-chain
+SUPPLY_CHAIN_FINDINGS_OUT=~/.cache/mitigate-supply-chain/findings.json \
   npm run check --silent -- <target>
 ```
 
