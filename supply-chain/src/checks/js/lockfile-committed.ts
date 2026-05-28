@@ -1,4 +1,4 @@
-import type { Check, Finding, Root, RepoContext, PackageManager } from '../types.ts';
+import type { NodeCheck, Finding, NodeRoot, RepoContext, PackageManager } from '../../types.ts';
 
 export const CHECK_ID = 'lockfile-committed';
 
@@ -13,10 +13,11 @@ const EXPECTED: Record<PackageManager, string> = {
   yarn: 'yarn.lock',
 };
 
-export const check: Check = {
+export const check: NodeCheck = {
+  ecosystem: 'js',
   id: CHECK_ID,
   severity: 'blocking',
-  async run(root: Root, ctx: RepoContext): Promise<Finding[]> {
+  async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     // The packageManager-pinned check handles the missing-packageManager case
     // on its own. Without a manager we can't know which lockfile to require,
     // so we stay quiet here.
@@ -59,6 +60,6 @@ export const check: Check = {
   },
 };
 
-function describe(root: Root): string {
+function describe(root: NodeRoot): string {
   return root.path === '.' ? 'the repository root' : root.path;
 }

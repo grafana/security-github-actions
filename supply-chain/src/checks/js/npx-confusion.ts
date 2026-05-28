@@ -1,5 +1,5 @@
-import type { Check, Finding, Root, RepoContext } from '../types.ts';
-import { listScannedFiles } from '../scanner.ts';
+import type { NodeCheck, Finding, NodeRoot, RepoContext } from '../../types.ts';
+import { listScannedFiles } from '../../scanner.ts';
 
 export const CHECK_ID = 'npx-confusion';
 
@@ -36,10 +36,11 @@ const ALLOWED_BARE: ReadonlySet<string> = new Set([
 // considered safe.
 const PATTERN = /\bnpx\s+([^\s]+)(?:\s|$)/;
 
-export const check: Check = {
+export const check: NodeCheck = {
+  ecosystem: 'js',
   id: CHECK_ID,
   severity: 'advisory',
-  async run(root: Root, ctx: RepoContext): Promise<Finding[]> {
+  async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     if (root.path !== '.') return [];
     const files = await listScannedFiles(ctx.repoRoot);
     const findings: Finding[] = [];

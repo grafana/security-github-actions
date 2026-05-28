@@ -1,5 +1,5 @@
-import type { Check, Finding, Root, RepoContext } from '../types.ts';
-import { listScannedFiles } from '../scanner.ts';
+import type { NodeCheck, Finding, NodeRoot, RepoContext } from '../../types.ts';
+import { listScannedFiles } from '../../scanner.ts';
 
 export const CHECK_ID = 'install-not-ci';
 
@@ -18,10 +18,11 @@ const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/s
 //   - `.md` files mentioning the command as docs (scanner doesn't include .md)
 const PATTERN = /\b(npm|yarn|pnpm)\s+install\b([^\n]*)/;
 
-export const check: Check = {
+export const check: NodeCheck = {
+  ecosystem: 'js',
   id: CHECK_ID,
   severity: 'advisory',
-  async run(root: Root, ctx: RepoContext): Promise<Finding[]> {
+  async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     if (root.path !== '.') return []; // repo-wide check, runs once at repo root
 
     const files = await listScannedFiles(ctx.repoRoot);

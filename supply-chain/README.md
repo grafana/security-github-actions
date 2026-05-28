@@ -47,22 +47,37 @@ You can also run the exact same checks on a local clone — no CI needed:
 | `cache-poisoning-publish` | Publishing workflows disable `actions/setup-node`'s package-manager cache. |
 | `registry-audit` | Surfaces high/critical advisories from `npm/pnpm/yarn audit`. |
 
+### Go (both ecosystems run in the same workflow)
+
+| ID | Severity | What it checks |
+|---|---|---|
+| `gosum-committed` | blocking | `go.sum` is present + tracked by git for any module with `require` entries. |
+| `go-toolchain-pinned` | blocking | `go.mod` declares a `toolchain` directive at Go ≥ 1.22.0; `go` directive also ≥ 1.22.0. |
+| `govulncheck-clean` | advisory | Surfaces **call-reachable** vulnerabilities from `govulncheck -json` (only flags vulns your code actually executes — not noisy graph-level reports). |
+
 See [docs/checks/](./docs/checks/) for the per-check fix guide. Each finding
-in the PR comment links to its check's doc page directly.
+in the PR comment links to its check's doc page directly. The ecosystem
+split rationale lives in [ADR-0009](./docs/adr/0009-add-go-support.md).
 
 ## How activation works
 
 The workflow applies the **activation gate** before running anything:
 
-- If your repo has **no `package.json` anywhere**, the workflow exits clean.
-  This is what allows the same org-required workflow to apply to Go, Python,
-  and other non-Node repos without false failures.
-- If a `package.json` is found, the workflow walks the tree, classifies each
-  manifest as a **root** or a **workspace member**, and runs the checks
-  against the roots only.
+- If your repo has **no `package.json` and no `go.mod`** anywhere, the
+  workflow exits clean. Repos in other ecosystems (Python, Rust, etc.)
+  pass through silently.
+- If either signal is found, the workflow walks the tree, classifies each
+  manifest / module as a **root** or a **workspace member**, and runs the
+  ecosystem-appropriate checks against the roots only.
 
-In monorepos (npm/yarn `"workspaces"` or `pnpm-workspace.yaml`), only the
-workspace root receives root-level checks. Workspace members do not.
+In JS monorepos (npm/yarn `"workspaces"` or `pnpm-workspace.yaml`), only
+the workspace root receives root-level checks. Workspace members do not.
+In Go monorepos, `go.work` plays the same role — modules declared via
+`use ./moduleX` are workspace members of the `go.work` root.
+
+A repository can contain **both** ecosystems (e.g. a Go service with a
+small JS UI). Both walkers run; each set of checks applies to its own
+roots independently.
 
 ## Suppressions
 

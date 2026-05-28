@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { Check, Finding, Root, RepoContext } from '../types.ts';
+import type { NodeCheck, Finding, NodeRoot, RepoContext } from '../../types.ts';
 import { readConfigIfPresent, valueMeetsRequirement } from './_config-helpers.ts';
 import type { CompareMode } from './_config-helpers.ts';
 import { parseTopLevelYamlScalars } from './pnpm-workspace-correct.ts';
@@ -19,10 +19,11 @@ const REQUIRED: ReadonlyArray<{ key: string; expected: string; mode: CompareMode
 // Even the *presence* of this key is a security risk per the hardening guide.
 const FORBIDDEN_KEY = 'approvedGitRepositories';
 
-export const check: Check = {
+export const check: NodeCheck = {
+  ecosystem: 'js',
   id: CHECK_ID,
   severity: 'blocking',
-  async run(root: Root, ctx: RepoContext): Promise<Finding[]> {
+  async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     if (root.packageManager !== 'yarn') return [];
 
     const relPath = root.path === '.' ? '.yarnrc.yml' : `${root.path}/.yarnrc.yml`;

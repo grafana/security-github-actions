@@ -1,4 +1,4 @@
-import type { Check, Finding, Root } from '../types.ts';
+import type { NodeCheck, Finding, NodeRoot } from '../../types.ts';
 
 export const CHECK_ID = 'lockfile-conflict';
 
@@ -6,10 +6,11 @@ const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/s
 
 // Two-or-more lockfiles at the same root => almost always a half-finished
 // migration between package managers. Refuse to guess.
-export const check: Check = {
+export const check: NodeCheck = {
+  ecosystem: 'js',
   id: CHECK_ID,
   severity: 'blocking',
-  async run(root: Root): Promise<Finding[]> {
+  async run(root: NodeRoot): Promise<Finding[]> {
     if (root.lockfiles.length <= 1) return [];
     return [
       {

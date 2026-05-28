@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { discoverRoots } from '../src/walk.ts';
-import { check, parseTopLevelYamlScalars, CHECK_ID } from '../src/checks/pnpm-workspace-correct.ts';
+import { check, parseTopLevelYamlScalars, CHECK_ID } from '../src/checks/js/pnpm-workspace-correct.ts';
 import type { RepoContext } from '../src/types.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));

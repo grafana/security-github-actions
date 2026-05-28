@@ -13,25 +13,38 @@ The first job in an org-required workflow whose only purpose is to decide whethe
 ## Supply-chain workflow
 
 ### Static check
-A check that depends only on files committed to the repository — no network, no advisory database. Same input ⇒ same output, always. **Blocking**: a violation fails the workflow and (via the ruleset) blocks merge. Examples: "is `.npmrc` present and correct?", "is the lockfile committed?", "is `packageManager:` pinned?".
+A check that depends only on files committed to the repository — no network, no advisory database. Same input ⇒ same output, always. **Blocking**: a violation fails the workflow and (via the ruleset) blocks merge. Examples: "is `.npmrc` present and correct?" (JS), "is the lockfile committed?" (JS), "is `go.sum` committed?" (Go), "is the Go toolchain pinned?" (Go).
 
 ### Advisory check
-A check whose result depends on external state (registry, advisory database, time of day). The same commit can pass on Monday and fail on Friday because a new CVE was published overnight. **Non-blocking**: surfaces via PR comment to nudge the author, but `continue-on-error: true` keeps it from gating merge. Example: `pnpm audit`.
+A check whose result depends on external state (registry, advisory database, time of day). The same commit can pass on Monday and fail on Friday because a new CVE was published overnight. **Non-blocking**: surfaces via PR comment to nudge the author, but `continue-on-error: true` keeps it from gating merge. Examples: `pnpm audit` (JS), `govulncheck` (Go).
+
+### Ecosystem
+A language/package-manager world the workflow knows how to inspect. Today: `js` (Node.js — npm / pnpm / yarn) and `go` (Go modules). Each ecosystem has its own walker, its own checks, and its own root type. The engine pairs a check with a root only when the ecosystems match, so a JS check never runs against a Go module and vice versa. Adding a new ecosystem (Python, Rust, …) means a new walker, a new root variant, and a new `checks/<eco>/` directory — not a plugin system.
 
 ### Manifest
-A single `package.json` file in the repository. The presence of *any* manifest activates the supply-chain workflow.
+The file the walker keys on to discover roots. Ecosystem-specific:
+- **JS**: `package.json`
+- **Go**: `go.mod`
+
+The presence of *any* manifest of *any* known ecosystem activates the supply-chain workflow.
 
 ### Root
-A manifest that is **not** a workspace member of any ancestor manifest. In a workspace monorepo, the workspace root is the root and its workspace members are not. In a repository with several independent projects sharing a tree, each project's top-level manifest is a root. All "is the lockfile committed?" / "is `packageManager:` pinned?" / ".npmrc present?" checks operate at root granularity.
+A manifest that is **not** a workspace member of any ancestor manifest *in the same ecosystem*. In a workspace monorepo, the workspace root is the root and its workspace members are not. In a repository with several independent projects sharing a tree, each project's top-level manifest is a root. Checks operate at root granularity.
+
+A repository can contain roots from **multiple** ecosystems simultaneously (e.g. a Go service with a JS UI in `web/`). Each set is discovered and checked independently.
 
 ### Workspace member
-A manifest at path `P` such that some ancestor manifest declares `P` as a workspace (npm/yarn: `"workspaces": [...]`; pnpm: `pnpm-workspace.yaml`). Workspace members do not have their own lockfile or `packageManager:` pin — those are inherited from the workspace root. Most supply-chain checks skip workspace members.
+A manifest at path `P` such that some ancestor manifest declares `P` as a workspace. The mechanism is ecosystem-specific:
+- **JS**: npm/yarn `"workspaces": [...]` in `package.json`, or pnpm `pnpm-workspace.yaml` listing `packages:`
+- **Go**: `go.work` listing `use ./moduleX` directives
+
+Workspace members do not have their own lockfile or version-pin file — those are inherited from the workspace root. Most supply-chain checks skip workspace members.
 
 ### Per-root walk
 Strategy for handling monorepos: discover every manifest, classify each as root or workspace member, then run checks against the **roots only**. Findings are keyed by root path. A violation in any root fails the workflow. Replaces the naive "per-manifest" walk, which would produce false positives in workspace monorepos.
 
 ### Lockfile conflict
-A root containing more than one lockfile (e.g. both `package-lock.json` and `pnpm-lock.yaml`). Almost always indicates a half-finished migration. Treated as a **hard fail** — the workflow refuses to guess which manager rules to apply, and the developer must resolve it explicitly.
+*(JS-only.)* A root containing more than one lockfile (e.g. both `package-lock.json` and `pnpm-lock.yaml`). Almost always indicates a half-finished migration. Treated as a **hard fail** — the workflow refuses to guess which manager rules to apply, and the developer must resolve it explicitly. Go has only one lockfile format (`go.sum`), so this term doesn't apply on the Go side.
 
 ## Reporting
 

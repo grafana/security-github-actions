@@ -1,0 +1,2 @@
+github.com/foo/bar v1.2.3 h1:fake-hash
+github.com/foo/bar v1.2.3/go.mod h1:fake-modhash

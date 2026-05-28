@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { discoverRoots } from '../src/walk.ts';
-import { check, CHECK_ID } from '../src/checks/lockfile-conflict.ts';
+import { check, CHECK_ID } from '../src/checks/js/lockfile-conflict.ts';
 import type { RepoContext } from '../src/types.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { valueMeetsRequirement } from '../src/checks/_config-helpers.ts';
+import { valueMeetsRequirement } from '../src/checks/js/_config-helpers.ts';
 
 test('eq mode: strict string equality', () => {
   assert.ok(valueMeetsRequirement('true', 'true', 'eq'));

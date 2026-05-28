@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Check, Finding, Root, RepoContext } from '../types.ts';
+import type { NodeCheck, Finding, NodeRoot, RepoContext } from '../../types.ts';
 
 export const CHECK_ID = 'packagemanager-pinned';
 
@@ -15,10 +15,11 @@ const MIN_VERSIONS = {
 
 const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/supply-chain/docs/checks/packagemanager-pinned.md';
 
-export const check: Check = {
+export const check: NodeCheck = {
+  ecosystem: 'js',
   id: CHECK_ID,
   severity: 'blocking',
-  async run(root: Root, ctx: RepoContext): Promise<Finding[]> {
+  async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     const manifestPath = root.path === '.' ? 'package.json' : `${root.path}/package.json`;
     const text = await readFile(join(ctx.repoRoot, manifestPath), 'utf8');
     let parsed: { packageManager?: unknown };

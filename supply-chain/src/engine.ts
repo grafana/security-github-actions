@@ -5,8 +5,9 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { env } from 'node:process';
 import { discoverRoots } from './walk.ts';
+import { discoverGoRoots } from './walk-go.ts';
 import { loadSuppressions, partitionBySuppression } from './suppressions.ts';
-import type { Check, Finding, RepoContext, CheckId } from './types.ts';
+import type { Check, Finding, RepoContext, CheckId, Root } from './types.ts';
 
 const execFileP = promisify(execFile);
 
@@ -28,7 +29,12 @@ export async function runChecks(
     trackedFiles: await loadTrackedFiles(repoRoot),
   };
 
-  const roots = await discoverRoots(repoRoot);
+  // Both walkers run unconditionally; each one self-skips when its
+  // discovery signal (`package.json` / `go.mod`) is absent.
+  const nodeRoots = await discoverRoots(repoRoot);
+  const goRoots = await discoverGoRoots(repoRoot);
+  const roots: Root[] = [...nodeRoots, ...goRoots];
+
   if (roots.length === 0) {
     return { ran: checks.map((c) => c.id), active: [], suppressed: [], rootCount: 0 };
   }
@@ -36,8 +42,14 @@ export async function runChecks(
   const rawFindings: Finding[] = [];
   for (const root of roots) {
     for (const c of checks) {
-      const fs = await c.run(root, ctx);
-      rawFindings.push(...fs);
+      // Dispatch by ecosystem — a JS check never runs against a Go root and
+      // vice versa. The narrowed run() signatures are type-safe in each arm.
+      if (c.ecosystem !== root.ecosystem) continue;
+      if (c.ecosystem === 'js' && root.ecosystem === 'js') {
+        rawFindings.push(...(await c.run(root, ctx)));
+      } else if (c.ecosystem === 'go' && root.ecosystem === 'go') {
+        rawFindings.push(...(await c.run(root, ctx)));
+      }
     }
   }
 

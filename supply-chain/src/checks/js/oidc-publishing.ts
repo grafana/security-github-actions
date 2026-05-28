@@ -1,5 +1,5 @@
-import type { Check, Finding, Root, RepoContext } from '../types.ts';
-import { listScannedFiles, isWorkflowFile, type ScannedFile } from '../scanner.ts';
+import type { NodeCheck, Finding, NodeRoot, RepoContext } from '../../types.ts';
+import { listScannedFiles, isWorkflowFile, type ScannedFile } from '../../scanner.ts';
 
 export const CHECK_ID = 'oidc-publishing';
 
@@ -13,10 +13,11 @@ const PUBLISH_RE = /^\s*(?:[-]?\s*run:\s*)?.*\b(npm|pnpm|yarn(?:\s+npm)?)\s+publ
 const TOKEN_RE = /\b(NPM_TOKEN|NODE_AUTH_TOKEN|NPM_AUTH_TOKEN)\b/;
 const ID_TOKEN_WRITE_RE = /id-token\s*:\s*write/;
 
-export const check: Check = {
+export const check: NodeCheck = {
+  ecosystem: 'js',
   id: CHECK_ID,
   severity: 'advisory',
-  async run(root: Root, ctx: RepoContext): Promise<Finding[]> {
+  async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     if (root.path !== '.') return [];
 
     const files = (await listScannedFiles(ctx.repoRoot)).filter((f) => isWorkflowFile(f.path));

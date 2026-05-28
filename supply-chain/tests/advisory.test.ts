@@ -6,10 +6,10 @@ import { dirname, join } from 'node:path';
 import { discoverRoots } from '../src/walk.ts';
 import type { Check, RepoContext } from '../src/types.ts';
 
-import { check as installNotCi } from '../src/checks/install-not-ci.ts';
-import { check as npxConfusion } from '../src/checks/npx-confusion.ts';
-import { check as oidc } from '../src/checks/oidc-publishing.ts';
-import { check as cachePublish } from '../src/checks/cache-poisoning-publish.ts';
+import { check as installNotCi } from '../src/checks/js/install-not-ci.ts';
+import { check as npxConfusion } from '../src/checks/js/npx-confusion.ts';
+import { check as oidc } from '../src/checks/js/oidc-publishing.ts';
+import { check as cachePublish } from '../src/checks/js/cache-poisoning-publish.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(here, 'fixtures', 'advisory');

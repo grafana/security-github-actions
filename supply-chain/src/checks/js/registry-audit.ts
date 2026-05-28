@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
-import type { Check, Finding, Root, RepoContext, PackageManager } from '../types.ts';
+import type { NodeCheck, Finding, NodeRoot, RepoContext, PackageManager } from '../../types.ts';
 import { parseAuditOutput } from './_audit-parse.ts';
 import type { Advisory } from './_audit-parse.ts';
 
@@ -17,10 +17,11 @@ const MAX_ADVISORIES_PER_ROOT = 20;
 
 const execFileP = promisify(execFile);
 
-export const check: Check = {
+export const check: NodeCheck = {
+  ecosystem: 'js',
   id: CHECK_ID,
   severity: 'advisory',
-  async run(root: Root, ctx: RepoContext): Promise<Finding[]> {
+  async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     if (root.packageManager === null) return [];
 
     const cmd = auditCommand(root.packageManager);

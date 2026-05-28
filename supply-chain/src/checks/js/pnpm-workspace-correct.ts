@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { Check, Finding, Root, RepoContext } from '../types.ts';
+import type { NodeCheck, Finding, NodeRoot, RepoContext } from '../../types.ts';
 import { readConfigIfPresent, valueMeetsRequirement } from './_config-helpers.ts';
 import type { CompareMode } from './_config-helpers.ts';
 
@@ -19,10 +19,11 @@ const REQUIRED: ReadonlyArray<{ key: string; expected: string; mode: CompareMode
   { key: 'blockExoticSubdeps', expected: 'true', mode: 'eq' },
 ];
 
-export const check: Check = {
+export const check: NodeCheck = {
+  ecosystem: 'js',
   id: CHECK_ID,
   severity: 'blocking',
-  async run(root: Root, ctx: RepoContext): Promise<Finding[]> {
+  async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     if (root.packageManager !== 'pnpm') return [];
 
     const relPath = root.path === '.' ? 'pnpm-workspace.yaml' : `${root.path}/pnpm-workspace.yaml`;

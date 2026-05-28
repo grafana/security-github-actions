@@ -1,29 +1,35 @@
 // The single source of truth for which checks exist and how they're grouped.
-// Every CLI (cli.ts, audit-cli.ts, check.ts) imports from here so adding a
-// new check requires only one edit.
+// Every CLI invocation imports from here so adding a new check requires only
+// one edit.
 //
 // The order of each array is the order checks appear in the "Passing checks"
 // section of the rendered report.
 
 import type { Check } from './types.ts';
 
-import { check as lockfileCommitted } from './checks/lockfile-committed.ts';
-import { check as lockfileConflict } from './checks/lockfile-conflict.ts';
-import { check as packagemanagerPinned } from './checks/packagemanager-pinned.ts';
-import { check as npmrcCorrect } from './checks/npmrc-correct.ts';
-import { check as pnpmWorkspaceCorrect } from './checks/pnpm-workspace-correct.ts';
-import { check as yarnrcCorrect } from './checks/yarnrc-correct.ts';
-import { check as installNotCi } from './checks/install-not-ci.ts';
-import { check as npxConfusion } from './checks/npx-confusion.ts';
-import { check as oidcPublishing } from './checks/oidc-publishing.ts';
-import { check as cachePoisoningPublish } from './checks/cache-poisoning-publish.ts';
-import { check as registryAudit } from './checks/registry-audit.ts';
+// JS / Node.js ecosystem
+import { check as lockfileCommitted } from './checks/js/lockfile-committed.ts';
+import { check as lockfileConflict } from './checks/js/lockfile-conflict.ts';
+import { check as packagemanagerPinned } from './checks/js/packagemanager-pinned.ts';
+import { check as npmrcCorrect } from './checks/js/npmrc-correct.ts';
+import { check as pnpmWorkspaceCorrect } from './checks/js/pnpm-workspace-correct.ts';
+import { check as yarnrcCorrect } from './checks/js/yarnrc-correct.ts';
+import { check as installNotCi } from './checks/js/install-not-ci.ts';
+import { check as npxConfusion } from './checks/js/npx-confusion.ts';
+import { check as oidcPublishing } from './checks/js/oidc-publishing.ts';
+import { check as cachePoisoningPublish } from './checks/js/cache-poisoning-publish.ts';
+import { check as registryAudit } from './checks/js/registry-audit.ts';
+
+// Go ecosystem
+import { check as gosumCommitted } from './checks/go/gosum-committed.ts';
+import { check as goToolchainPinned } from './checks/go/toolchain-pinned.ts';
+import { check as govulncheckClean } from './checks/go/govulncheck-clean.ts';
 
 // Static checks: run in the `static` job at CI time (and locally by default).
 // Everything that doesn't need the network goes here — both blocking and
-// non-network advisory.
+// non-network advisory, both ecosystems.
 export const STATIC_CHECKS: Check[] = [
-  // Blocking — see ADR-0003 for severity rationale.
+  // JS blocking
   packagemanagerPinned,
   lockfileCommitted,
   lockfileConflict,
@@ -31,7 +37,11 @@ export const STATIC_CHECKS: Check[] = [
   pnpmWorkspaceCorrect,
   yarnrcCorrect,
 
-  // Advisory (non-network).
+  // Go blocking
+  gosumCommitted,
+  goToolchainPinned,
+
+  // JS advisory (non-network)
   installNotCi,
   npxConfusion,
   oidcPublishing,
@@ -40,8 +50,8 @@ export const STATIC_CHECKS: Check[] = [
 
 // Audit checks: run in the separate `audit` CI job (different network needs,
 // different failure semantics). Kept out of STATIC_CHECKS so the static job
-// stays offline-clean.
-export const AUDIT_CHECKS: Check[] = [registryAudit];
+// stays offline-clean. Includes both ecosystems' vulnerability scanners.
+export const AUDIT_CHECKS: Check[] = [registryAudit, govulncheckClean];
 
 // Convenience for the local entry point and one-shot survey use cases.
 export const ALL_CHECKS: Check[] = [...STATIC_CHECKS, ...AUDIT_CHECKS];

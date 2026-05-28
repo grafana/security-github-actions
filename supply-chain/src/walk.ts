@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname, posix } from 'node:path';
-import type { Root, PackageManager } from './types.ts';
+import type { NodeRoot, PackageManager } from './types.ts';
 
 // Directory names we never descend into. Adding to this list is cheap; the cost
 // of accidentally walking into them is real (node_modules in particular can be
@@ -39,7 +39,7 @@ type RawManifest = {
   workspaces?: string[] | { packages?: string[] };
 };
 
-export async function discoverRoots(repoRoot: string): Promise<Root[]> {
+export async function discoverRoots(repoRoot: string): Promise<NodeRoot[]> {
   const ignorePrefixes = await readIgnoreFile(repoRoot);
   const manifestPaths = (await findManifests(repoRoot)).filter(
     (p) => !ignorePrefixes.some((prefix) => p === prefix || p.startsWith(prefix + posix.sep)),
@@ -75,11 +75,12 @@ export async function discoverRoots(repoRoot: string): Promise<Root[]> {
     }
   }
 
-  const roots: Root[] = [];
+  const roots: NodeRoot[] = [];
   for (const manifestPath of manifestPaths) {
     if (memberOf.has(manifestPath)) continue;
     const dirPath = dirname(manifestPath) === '.' ? '.' : dirname(manifestPath);
     roots.push({
+      ecosystem: 'js',
       path: dirPath,
       packageManager: resolvePackageManager(parsed.get(manifestPath)),
       lockfiles: await findLockfiles(repoRoot, dirPath),

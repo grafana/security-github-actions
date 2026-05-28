@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { parseAuditOutput } from '../src/checks/_audit-parse.ts';
+import { parseAuditOutput } from '../src/checks/js/_audit-parse.ts';
 
 // Minimal real-shape fixture: npm audit-report v2 (also pnpm v9+).
 // One critical advisory in `lodash`, one high in `axios`, one moderate that we
