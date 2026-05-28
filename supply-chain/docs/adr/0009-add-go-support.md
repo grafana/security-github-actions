@@ -1,6 +1,6 @@
 # Add Go support as a parallel ecosystem
 
-The workflow now spans two ecosystems: JS (Node.js) and Go. Checks live under `src/checks/js/` and `src/checks/go/`. Each `Check` is statically tagged with `ecosystem: 'js' | 'go'`; the engine pairs a check with a root only when the ecosystems match, so a JS check is never invoked against a Go root and vice versa. The `Root` type is a discriminated union (`NodeRoot | GoRoot`); the two walkers (`walk.ts`, `walk-go.ts`) produce their own variant and the engine runs them both before dispatching checks.
+The workflow now spans two ecosystems: JS (Node.js) and Go. The repo is split symmetrically by ecosystem: `src/js/`, `src/go/`, `tests/js/`, `tests/go/`, `docs/checks/js/`, `docs/checks/go/`. Cross-ecosystem code (engine, report renderer, suppressions, types, the CLI itself) stays at the top of each of `src/`, `tests/`, and `docs/`. Each `Check` is statically tagged with `ecosystem: 'js' | 'go'`; the engine pairs a check with a root only when the ecosystems match, so a JS check is never invoked against a Go root and vice versa. The `Root` type is a discriminated union (`NodeRoot | GoRoot`); the two walkers (`src/js/walk.ts`, `src/go/walk.ts`) produce their own variant and the engine runs them both before dispatching checks.
 
 ## Considered
 
@@ -12,5 +12,5 @@ The workflow now spans two ecosystems: JS (Node.js) and Go. Checks live under `s
 
 - **`check_id`s remain globally unique.** A Go check's id (`gosum-committed`) must never collide with a JS check's id, even though they target different ecosystems. The id is the suppression key and the metrics key — it must be unambiguous.
 - **Workflow runners now install Go.** The `audit` job's `setup-go` step adds ~10–15 seconds; `govulncheck` install adds another ~5. Negligible compared to the typical npm/pnpm install time but worth noting in the rollout discussion.
-- **The ecosystem split is the only kind of polymorphism the engine accepts.** New ecosystems (Python, Rust, etc.) would follow the same pattern: a new walker, a new root variant, a new `Check` arm in the union, a new `checks/<eco>/` directory. We don't bake in a plugin system or runtime registry; new ecosystems are first-class TypeScript additions.
+- **The ecosystem split is the only kind of polymorphism the engine accepts.** New ecosystems (Python, Rust, etc.) would follow the same pattern: a new walker, a new root variant, a new `Check` arm in the union, and parallel `src/<eco>/`, `tests/<eco>/`, `docs/checks/<eco>/` directories. We don't bake in a plugin system or runtime registry; new ecosystems are first-class TypeScript additions.
 - **Per-ecosystem activation does not exist.** Once the gate fires, *all* checks run. A repo with only `package.json` has Go checks return zero findings (no Go roots discovered) and vice versa. No noise; no opt-out.

@@ -1,5 +1,6 @@
 # Paths excluded from the supply-chain-check walker. One directory prefix per
-# line. Used by the supply-chain CLI's walker (see supply-chain/src/walk.ts).
+# line. Used by the supply-chain CLI's walkers (src/js/walk.ts, src/go/walk.ts).
 
-# Test fixtures contain throwaway package.json files used only by unit tests.
-supply-chain/tests/fixtures
+# Test fixtures contain throwaway package.json / go.mod files used only by unit tests.
+supply-chain/tests/js/fixtures
+supply-chain/tests/go/fixtures

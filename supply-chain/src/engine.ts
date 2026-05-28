@@ -4,8 +4,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { env } from 'node:process';
-import { discoverRoots } from './walk.ts';
-import { discoverGoRoots } from './walk-go.ts';
+import { discoverJsRoots } from './js/walk.ts';
+import { discoverGoRoots } from './go/walk.ts';
 import { loadSuppressions, partitionBySuppression } from './suppressions.ts';
 import type { Check, Finding, RepoContext, CheckId, Root } from './types.ts';
 
@@ -31,7 +31,7 @@ export async function runChecks(
 
   // Both walkers run unconditionally; each one self-skips when its
   // discovery signal (`package.json` / `go.mod`) is absent.
-  const nodeRoots = await discoverRoots(repoRoot);
+  const nodeRoots = await discoverJsRoots(repoRoot);
   const goRoots = await discoverGoRoots(repoRoot);
   const roots: Root[] = [...nodeRoots, ...goRoots];
 

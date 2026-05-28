@@ -202,25 +202,50 @@ npm run check             # dogfood against the surrounding repo
 
 ### Layout
 
+The repo is split by ecosystem. The top level of each of `src/`, `tests/`,
+and `docs/checks/` holds only **ecosystem-agnostic** code (engine, report,
+suppressions, …); ecosystem-specific code lives under `js/` or `go/`.
+
 ```
 supply-chain/
   CONTEXT.md              # domain glossary
-  README.md               # this file
+  README.md
   package.json
   tsconfig.json
   src/
-    types.ts              # Finding, Check, Root, RepoContext
-    walk.ts               # workspace-aware root discovery
-    report.ts             # markdown rendering for sticky comment + step summary
-    cli.ts                # entry point
-    checks/
-      lockfile-committed.ts
+    # reusable
+    types.ts              # Finding, Check, Root, RepoContext (discriminated union)
+    engine.ts             # walk + run checks + apply suppressions
+    report.ts             # markdown renderer
+    text-report.ts        # terminal renderer
+    check.ts              # single CLI entry point (used in CI + locally)
+    registry.ts           # single source of truth for which checks exist
+    io.ts, render-cli.ts, post-comment.ts, suppressions.ts
+    # JS-specific
+    js/
+      walk.ts             # discoverJsRoots()
+      scanner.ts          # workflow/Dockerfile/etc. scanner for heuristic checks
+      _audit-parse.ts, _config-helpers.ts
+      lockfile-committed.ts, npmrc-correct.ts, …
+    # Go-specific
+    go/
+      walk.ts             # discoverGoRoots()
+      _govulncheck-parse.ts
+      gosum-committed.ts, toolchain-pinned.ts, govulncheck-clean.ts
   tests/
-    fixtures/<check>/<good|bad-*>/...
-    *.test.ts             # node --test
+    # reusable
+    io.test.ts, suppressions.test.ts, text-report.test.ts
+    js/
+      walk.test.ts, lockfile-committed.test.ts, audit-parse.test.ts, …
+      fixtures/<check>/<good|bad-*>/...
+    go/
+      walk.test.ts, checks.test.ts, govulncheck-parse.test.ts
+      fixtures/<check>/<good|bad-*>/...
   docs/
-    adr/                  # architecture decision records
-    checks/               # per-check fix guide (each linked from the finding)
+    adr/                  # architecture decision records (cross-ecosystem)
+    checks/
+      js/<check_id>.md    # per-check fix guide
+      go/<check_id>.md
 ```
 
 ### Workflow architecture (3 jobs, 1 CLI)
@@ -251,19 +276,25 @@ The same `check.ts` (with no flags) is what runs locally via `npm run check`. CI
 
 ### Adding a new check
 
+The ecosystem of the new check (`js` or `go`) determines which subdirectory
+each artifact lands in. Substitute `<eco>` accordingly below.
+
 1. Decide the `check_id` — it is **append-only** once shipped. Suppressions
    reference it by string forever. See [ADR-0005](./docs/adr/0005-suppression-as-in-repo-config.md).
-2. Add `src/checks/<check_id>.ts` exporting `check: Check`.
-3. Add fixtures under `tests/fixtures/<check_id>/` — at least one `good-*` and
-   one `bad-*`. The fixtures must be real directory trees; the test invokes
-   `discoverRoots` against them and feeds the resulting `Root` into `check.run`.
-4. Add `tests/<check_id>.test.ts` asserting the findings count + check_id + key
-   message fragments. Test against *behavior* (returned findings) not
-   *implementation* (strings in source).
-5. Register the check in `src/cli.ts`'s `CHECKS` array.
-6. Write `docs/checks/<check_id>.md` — this is what the finding's `doc_link`
-   points at. Should explain: what failed, why we check it, and the precise
-   fix.
+2. Add `src/<eco>/<check_id>.ts` exporting `check: NodeCheck` or `check: GoCheck`,
+   with `ecosystem: '<eco>'`.
+3. Add fixtures under `tests/<eco>/fixtures/<check_id>/` — at least one
+   `good-*` and one `bad-*`. The fixtures must be real directory trees; the
+   test invokes the ecosystem-appropriate `discoverJsRoots` /
+   `discoverGoRoots` against them and feeds the resulting root into `check.run`.
+4. Add `tests/<eco>/<check_id>.test.ts` asserting the findings count, the
+   `check_id`, and key message fragments. Test against *behavior* (returned
+   findings), not *implementation* (specific source strings).
+5. Register the check in `src/registry.ts`'s `STATIC_CHECKS` or
+   `AUDIT_CHECKS` array.
+6. Write `docs/checks/<eco>/<check_id>.md` — this is what the finding's
+   `doc_link` points at. Should explain: what failed, why we check it, and
+   the precise fix.
 
 ### Design decisions
 
