@@ -54,6 +54,6 @@ jobs:
       extra-args: --offline
       # Reusable workflow gates bench job on org + non-fork PR (OIDC/Vault not available on fork PRs); pass true to opt in.
       send-bench-metrics: true
-      auto-delete-dangerous-branches: ${{ vars.ZIZMOR_SLACK_CHANNEL_ID != '' }}
-      auto-delete-slack-channel-id: ${{ vars.ZIZMOR_SLACK_CHANNEL_ID }}
+      auto-delete-dangerous-branches: true
+      auto-delete-slack-channel-id: CHQDPC970
     secrets: inherit
