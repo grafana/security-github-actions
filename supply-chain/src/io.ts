@@ -1,10 +1,16 @@
-// Shared JSON I/O format between the three CLIs (static, audit, render).
+// Shared JSON I/O format between the check CLI and the render CLI.
 //
-// The workflow uses two parallel "check" jobs (static + audit) and one
-// "render" job that aggregates their output and posts the single sticky
+// The check CLI writes a payload to disk; the render CLI reads one (or
+// more) payloads and produces the markdown that becomes the sticky
 // comment. JSON, not markdown, is what flows between jobs — markdown is
 // only produced at the very end so the renderer can group findings by
-// section consistently across both sources.
+// section consistently.
+//
+// PR1 ships a single `static` source. A follow-up PR adds an `audit`
+// source (network-dependent `npm/pnpm/yarn audit`) that the render CLI
+// merges into the same comment — `ReportPayload.source` and
+// `mergePayloads()` already model that fan-in so PR2 doesn't have to
+// reshape this contract.
 
 import { readFile, writeFile } from 'node:fs/promises';
 import type { Finding, CheckId } from './types.ts';

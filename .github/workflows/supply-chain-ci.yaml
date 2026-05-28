@@ -1,0 +1,55 @@
+# Runs the supply-chain CLI's own unit tests + typecheck on every PR that
+# touches its source. The org-required `supply-chain.yaml` workflow only
+# *applies* the CLI; this one verifies the CLI itself still works. Without
+# it, a regression in the CLI could ship to main and quietly misfire on
+# every consuming repo.
+name: supply-chain CLI tests
+
+permissions: {}
+
+on:
+  push:
+    paths:
+      - supply-chain/**
+      - .github/workflows/supply-chain-ci.yaml
+  pull_request:
+    types:
+      - edited
+      - opened
+      - ready_for_review
+      - synchronize
+      - reopened
+    paths:
+      - supply-chain/**
+      - .github/workflows/supply-chain-ci.yaml
+  merge_group:
+    types: [checks_requested]
+
+jobs:
+  test:
+    name: Test + typecheck
+    runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+
+      - name: Install devDependencies
+        working-directory: supply-chain
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: supply-chain
+        run: ./node_modules/.bin/tsc --noEmit
+
+      - name: Run tests
+        working-directory: supply-chain
+        run: npm test

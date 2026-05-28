@@ -1,16 +1,18 @@
-// Render CLI. Reads N JSON payloads (produced by the static and audit
-// CLIs), merges them into a single ReportInput, and writes the unified
-// markdown to:
+// Render CLI. Reads N JSON payloads produced by the check CLI, merges
+// them into a single ReportInput, and writes the resulting markdown to:
 //   - GITHUB_STEP_SUMMARY (always, if set)
 //   - SUPPLY_CHAIN_COMMENT_OUT (always, if set) — feeds post-comment.ts
 //
-// Missing input files are tolerated: if one of the upstream jobs failed to
-// produce its JSON (e.g. audit job's network crashed), the renderer still
-// produces a useful comment from whatever it has.
+// PR1 only passes a single `static` payload; a follow-up PR adds an
+// `audit` payload that the renderer merges into the same comment.
 //
-// Exit code is 0 even if some inputs are missing. The render job is purely
-// cosmetic — it should never fail the workflow. The static job's exit code
-// is what gates merge.
+// Missing input files are tolerated: if one of the upstream jobs failed
+// to produce its JSON, the renderer still emits a useful comment from
+// whatever it has.
+//
+// Exit code is 0 even if some inputs are missing. The render job is
+// purely cosmetic — it should never fail the workflow. The static job's
+// exit code is what gates merge.
 
 import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
