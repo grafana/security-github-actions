@@ -14,3 +14,15 @@ rules:
         # https://nvd.nist.gov/vuln/detail/cve-2025-30066
         # https://nvd.nist.gov/vuln/detail/cve-2025-30154
         - reviewdog/*
+  # The supply-chain CLI ships intentionally-broken test fixtures under
+  # supply-chain/tests/js/fixtures/. They contain patterns we WANT our own
+  # checks to detect (cache-poisoning, missing OIDC, install-not-ci, npx
+  # confusion). Zizmor correctly finds the same patterns and would flag
+  # every fixture as a real vulnerability. Tell it to skip those files —
+  # the unit tests for the corresponding checks already exercise them.
+  cache-poisoning:
+    ignore:
+      - supply-chain/tests/js/fixtures/advisory/cache-publish-bad/.github/workflows/publish.yml
+      - supply-chain/tests/js/fixtures/advisory/cache-publish-ok/.github/workflows/publish.yml
+      - supply-chain/tests/js/fixtures/advisory/oidc-missing/.github/workflows/publish.yml
+      - supply-chain/tests/js/fixtures/advisory/oidc-ok/.github/workflows/publish.yml
