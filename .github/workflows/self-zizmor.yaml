@@ -45,7 +45,7 @@ jobs:
       - zizmor-check
     if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@b57a591ff84c7e03eef6889f80a2350a17ba7cbe
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@59249e1e64022197bce704dcbe1546413e23ba2c
     with:
       runs-on: ${{ !github.event.repository.private && 'ubuntu-latest' || 'ubuntu-arm64-small' }}
       fail-severity: high
@@ -54,6 +54,6 @@ jobs:
       extra-args: --offline
       # Reusable workflow gates bench job on org + non-fork PR (OIDC/Vault not available on fork PRs); pass true to opt in.
       send-bench-metrics: true
-      auto-delete-dangerous-branches: true
+      auto-delete-dangerous-branches: ${{ vars.ZIZMOR_SLACK_CHANNEL_ID != '' }}
       auto-delete-slack-channel-id: ${{ vars.ZIZMOR_SLACK_CHANNEL_ID }}
     secrets: inherit
