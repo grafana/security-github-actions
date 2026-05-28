@@ -3,7 +3,7 @@
 // in code and stop emitting it, but never reuse the string.
 export type CheckId = string;
 
-export type Severity = 'blocking' | 'advisory';
+export type Severity = 'critical' | 'advisory';
 
 export type Ecosystem = 'js' | 'go';
 
@@ -16,7 +16,7 @@ export type NodeRoot = {
   // Path relative to the repository root.
   path: string;
   // Resolved from `packageManager:` in package.json. `null` when the field is
-  // missing — that is itself a blocking finding.
+  // missing — that is itself a critical finding.
   packageManager: PackageManager | null;
   // Repo-relative paths of lockfiles discovered at this root. More than one
   // => lockfile conflict (hard fail).

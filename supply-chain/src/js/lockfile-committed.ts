@@ -16,7 +16,7 @@ const EXPECTED: Record<PackageManager, string> = {
 export const check: NodeCheck = {
   ecosystem: 'js',
   id: CHECK_ID,
-  severity: 'blocking',
+  severity: 'critical',
   async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     // The packageManager-pinned check handles the missing-packageManager case
     // on its own. Without a manager we can't know which lockfile to require,
@@ -31,7 +31,7 @@ export const check: NodeCheck = {
       return [
         {
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: `Missing lockfile (${expectedName})`,
           detail: `Root ${describe(root)} declares packageManager=${root.packageManager} but has no ${expectedName}.`,
@@ -46,7 +46,7 @@ export const check: NodeCheck = {
       return [
         {
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: `Lockfile present but not committed (${expectedName})`,
           detail: `${expectedPath} exists on disk but is not tracked by git. Likely .gitignore'd.`,

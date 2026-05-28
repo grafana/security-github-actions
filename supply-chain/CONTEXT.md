@@ -13,10 +13,10 @@ The first job in an org-required workflow whose only purpose is to decide whethe
 ## Supply-chain workflow
 
 ### Static check
-A check that depends only on files committed to the repository — no network, no advisory database. Same input ⇒ same output, always. **Blocking**: a violation fails the workflow and (via the ruleset) blocks merge. Examples: "is `.npmrc` present and correct?" (JS), "is the lockfile committed?" (JS), "is `go.sum` committed?" (Go), "is the Go toolchain pinned?" (Go).
+A check that depends only on files committed to the repository — no network, no advisory database. Same input ⇒ same output, always. **Critical**: a violation fails the workflow and (via the ruleset) blocks merge. Examples: "is `.npmrc` present and correct?" (JS), "is the lockfile committed?" (JS), "is `go.sum` committed?" (Go), "is the Go toolchain pinned?" (Go).
 
 ### Advisory check
-A check whose result depends on external state (registry, advisory database, time of day). The same commit can pass on Monday and fail on Friday because a new CVE was published overnight. **Non-blocking**: surfaces via PR comment to nudge the author, but `continue-on-error: true` keeps it from gating merge. Examples: `pnpm audit` (JS), `govulncheck` (Go).
+A check whose result depends on external state (registry, advisory database, time of day). The same commit can pass on Monday and fail on Friday because a new CVE was published overnight. Doesn't gate merge: surfaces via PR comment to nudge the author, but `continue-on-error: true` keeps it from gating merge. Examples: `pnpm audit` (JS), `govulncheck` (Go).
 
 ### Ecosystem
 A language/package-manager world the workflow knows how to inspect. Today: `js` (Node.js — npm / pnpm / yarn) and `go` (Go modules). Each ecosystem has its own walker, its own checks, and its own root type. The engine pairs a check with a root only when the ecosystems match, so a JS check never runs against a Go module and vice versa. Adding a new ecosystem (Python, Rust, …) means a new walker, a new root variant, and a new `checks/<eco>/` directory — not a plugin system.
@@ -51,7 +51,7 @@ Strategy for handling monorepos: discover every manifest, classify each as root 
 ### Finding
 The atomic unit a check produces. Stable shape used by every check and the report renderer:
 - `check_id` — stable identifier (e.g. `npmrc-min-release-age`); never renamed once shipped, because future suppression and metrics key on it.
-- `severity` — `blocking` or `advisory`. Blocking failures fail the workflow; advisory ones only surface in the report.
+- `severity` — `critical` or `advisory`. Critical failures fail the workflow; advisory ones only surface in the report.
 - `root` — the root path the finding applies to (`.` for single-package repos, `apps/frontend` etc. for monorepos).
 - `title`, `detail`, `fix`, `doc_link` — human-facing text.
 
@@ -60,8 +60,8 @@ The single PR comment the supply-chain workflow maintains, identified by an HTML
 
 ### Report
 The aggregated rendering of all findings for a workflow run. Mirrored identically into the sticky PR comment and the GitHub Step Summary. Sections (in order):
-1. **Top-line status** — ✅ all passed, or ❌ N blocking / M advisory
-2. **Blocking violations** — expanded
+1. **Top-line status** — ✅ all passed, or ❌ N critical / M advisory
+2. **Critical violations** — expanded
 3. **Advisory findings** — expanded
 4. **Passing checks** — collapsed by default
 5. **Footer** — link to the workflow run
@@ -69,4 +69,4 @@ The aggregated rendering of all findings for a workflow run. Mirrored identicall
 In monorepos, findings are **grouped by root** inside each section, not flat.
 
 ### Suppression
-A documented exemption that allows a specific check to be reported as "suppressed" rather than "blocking" or "advisory" on a specific repository. Lives in `.github/supply-chain.yml` in the target repo. Required fields per entry: `check_id` and `reason`. Optional: `expires` (ISO date — past that, the suppression is ignored and the check fires normally). Suppressed findings **still appear in the report** under a dedicated "Suppressed" section — they are never silently dropped. Suppressing a check requires committing the suppression file, which is auditable in git history.
+A documented exemption that allows a specific check to be reported as "suppressed" rather than "critical" or "advisory" on a specific repository. Lives in `.github/supply-chain.yml` in the target repo. Required fields per entry: `check_id` and `reason`. Optional: `expires` (ISO date — past that, the suppression is ignored and the check fires normally). Suppressed findings **still appear in the report** under a dedicated "Suppressed" section — they are never silently dropped. Suppressing a check requires committing the suppression file, which is auditable in git history.

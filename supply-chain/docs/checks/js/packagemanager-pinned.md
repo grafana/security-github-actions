@@ -1,6 +1,6 @@
 # `packagemanager-pinned`
 
-**Severity:** blocking
+**Severity:** critical
 
 ## What this check verifies
 

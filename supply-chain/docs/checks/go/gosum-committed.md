@@ -1,6 +1,6 @@
 # `gosum-committed`
 
-**Severity:** blocking · **Applies to:** Go modules
+**Severity:** critical · **Applies to:** Go modules
 
 ## What this check verifies
 

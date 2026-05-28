@@ -5,7 +5,7 @@ description: Run the grafana org's supply-chain checks against a Node.js reposit
 
 # Supply-chain check & fix
 
-Run the supply-chain check against a target Node.js repository and walk the user through fixing every blocking and advisory finding.
+Run the supply-chain check against a target Node.js repository and walk the user through fixing every critical and advisory finding.
 
 ## Locate the CLI
 
@@ -35,7 +35,7 @@ SUPPLY_CHAIN_FINDINGS_OUT=~/.cache/supply-chain-skill/findings.json \
   npm run check --silent -- <target>
 ```
 
-The CLI exits 1 when there are blocking findings — that's expected; **don't treat exit 1 as an error**. Always read the JSON afterwards.
+The CLI exits 1 when there are critical findings — that's expected; **don't treat exit 1 as an error**. Always read the JSON afterwards.
 
 JSON shape (see `supply-chain/src/io.ts`):
 
@@ -43,7 +43,7 @@ JSON shape (see `supply-chain/src/io.ts`):
 {
   "ran": ["packagemanager-pinned", "..."],
   "findings": [
-    { "check_id": "...", "severity": "blocking" | "advisory",
+    { "check_id": "...", "severity": "critical" | "advisory",
       "root": ".", "title": "...", "detail": "...",
       "fix": "...", "doc_link": "..." }
   ],
@@ -60,7 +60,7 @@ Useful flags to pass after the `--` separator:
 
 ## Present and fix
 
-Show the user a one-line summary: `N blocking, M advisory across K roots`. Then for each finding, in order (blocking first, then advisory, grouped by `root`):
+Show the user a one-line summary: `N critical, M advisory across K roots`. Then for each finding, in order (critical first, then advisory, grouped by `root`):
 
 1. **Read the canonical fix guide** at `<CLI-DIR>/docs/checks/<ecosystem>/<check_id>.md` — `<ecosystem>` is `js` for npm/pnpm/yarn checks (`lockfile-committed`, `npmrc-correct`, etc.) or `go` for the Go ones (`gosum-committed`, `go-toolchain-pinned`, `govulncheck-clean`). The doc has the "Why," the precise fix recipe, and important subtleties (e.g. "even an empty list is a violation" for `yarnrc-correct`'s `approvedGitRepositories`). Always read this before acting — the `fix:` field on the finding is a one-liner; the doc has the full picture. The finding's `doc_link` field is also a direct URL to this same file, if you'd rather follow that.
 
@@ -99,7 +99,7 @@ Show the user a one-line summary: `N blocking, M advisory across K roots`. Then 
 
 After applying fixes, re-run the same command and confirm the findings cleared. If new findings appeared (fixing one config exposed another), iterate — typically one more pass clears them.
 
-Report the final state: `passed`, or `still N blocking / M advisory` with the remaining list.
+Report the final state: `passed`, or `still N critical / M advisory` with the remaining list.
 
 ## Suppression instead of fix
 

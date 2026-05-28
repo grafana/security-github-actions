@@ -12,7 +12,7 @@ const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/s
 // Cap on advisories rendered per root. Above this, we emit one summary
 // finding pointing the user at a local run for the full list. Stops the
 // "200 transitive moderate-severity advisories" wallpaper case from
-// drowning out blocking findings in the same comment.
+// drowning out critical findings in the same comment.
 const MAX_ADVISORIES_PER_ROOT = 20;
 
 const execFileP = promisify(execFile);

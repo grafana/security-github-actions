@@ -15,14 +15,14 @@ const MIN = { major: 1, minor: 22, patch: 0 };
 export const check: GoCheck = {
   ecosystem: 'go',
   id: CHECK_ID,
-  severity: 'blocking',
+  severity: 'critical',
   async run(root: GoRoot): Promise<Finding[]> {
     const findings: Finding[] = [];
 
     if (root.goToolchain === null) {
       findings.push({
         check_id: CHECK_ID,
-        severity: 'blocking',
+        severity: 'critical',
         root: root.path,
         title: 'Missing `toolchain` directive in go.mod',
         detail: `go.mod ${describePath(root)} does not pin a toolchain. Without it, the build uses whatever Go is on the runner.`,
@@ -34,7 +34,7 @@ export const check: GoCheck = {
       if (parsed === null) {
         findings.push({
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: `Could not parse \`toolchain\` value in go.mod`,
           detail: `Found \`toolchain go${root.goToolchain}\` ${describePath(root)}, which we cannot interpret.`,
@@ -44,7 +44,7 @@ export const check: GoCheck = {
       } else if (compareV(parsed, MIN) < 0) {
         findings.push({
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: `Go toolchain pinned below minimum (${root.goToolchain} < ${formatV(MIN)})`,
           detail: `go.mod ${describePath(root)} pins \`toolchain go${root.goToolchain}\`; minimum supported is ${formatV(MIN)}.`,
@@ -63,7 +63,7 @@ export const check: GoCheck = {
       if (parsed !== null && compareV(parsed, MIN) < 0) {
         findings.push({
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: `\`go\` directive below minimum (${root.goVersion} < ${formatV(MIN)})`,
           detail: `go.mod ${describePath(root)} declares \`go ${root.goVersion}\`; minimum supported is ${formatV(MIN)}.`,

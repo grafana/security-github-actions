@@ -4,7 +4,7 @@ import { strict as assert } from 'node:assert';
 import { renderHtml } from '../src/html-report.ts';
 import type { Finding } from '../src/types.ts';
 
-function finding(check_id: string, severity: 'blocking' | 'advisory', root = '.'): Finding {
+function finding(check_id: string, severity: 'critical' | 'advisory', root = '.'): Finding {
   return {
     check_id,
     severity,
@@ -16,7 +16,7 @@ function finding(check_id: string, severity: 'blocking' | 'advisory', root = '.'
   };
 }
 
-test('renderHtml: passing report omits blocking section, includes passing badge', () => {
+test('renderHtml: passing report omits critical section, includes passing badge', () => {
   const out = renderHtml({
     ran: ['a', 'b', 'c'],
     findings: [],
@@ -25,31 +25,31 @@ test('renderHtml: passing report omits blocking section, includes passing badge'
   });
   // Top-line is the "passed" message
   assert.match(out, /Supply-chain checks passed/);
-  // No blocking-violations section
-  assert.doesNotMatch(out, /Blocking violations/);
+  // No critical-violations section
+  assert.doesNotMatch(out, /Critical violations/);
   // Passing badge with count
   assert.match(out, /3 Passing/);
 });
 
-test('renderHtml: blocking findings render in their own section', () => {
+test('renderHtml: critical findings render in their own section', () => {
   const out = renderHtml({
     ran: ['a'],
-    findings: [finding('a', 'blocking')],
+    findings: [finding('a', 'critical')],
     suppressed: [],
     runUrl: null,
   });
-  assert.match(out, /Blocking violations.*\(1\)/s);
+  assert.match(out, /Critical violations.*\(1\)/s);
   assert.match(out, /a title/);
   assert.match(out, /do the fix/);
-  assert.match(out, /finding-blocking/); // CSS class
+  assert.match(out, /finding-critical/); // CSS class
 });
 
 test('renderHtml: findings group by root', () => {
   const out = renderHtml({
     ran: ['a'],
     findings: [
-      finding('a', 'blocking', 'apps/frontend'),
-      finding('a', 'blocking', 'apps/backend'),
+      finding('a', 'critical', 'apps/frontend'),
+      finding('a', 'critical', 'apps/backend'),
     ],
     suppressed: [],
     runUrl: null,
@@ -64,7 +64,7 @@ test('renderHtml: HTML special characters in titles/details are escaped', () => 
     findings: [
       {
         check_id: 'x',
-        severity: 'blocking',
+        severity: 'critical',
         root: '.',
         title: '<script>alert(1)</script>',
         detail: 'a & b "c"',
@@ -123,7 +123,7 @@ test('renderHtml: suppressed findings get their own section', () => {
   const out = renderHtml({
     ran: ['a'],
     findings: [],
-    suppressed: [finding('a', 'blocking')],
+    suppressed: [finding('a', 'critical')],
     runUrl: null,
   });
   assert.match(out, /Suppressed.*\(1\)/s);

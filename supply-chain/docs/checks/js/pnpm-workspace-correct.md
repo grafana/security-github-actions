@@ -1,6 +1,6 @@
 # `pnpm-workspace-correct`
 
-**Severity:** blocking · **Applies to:** pnpm roots
+**Severity:** critical · **Applies to:** pnpm roots
 
 ## What this check verifies
 

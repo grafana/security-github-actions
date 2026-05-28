@@ -42,13 +42,13 @@ A drift attack works like this:
 need to write to it, the command aborts with an error. The lockfile
 becomes the actual source of truth, not a suggestion.
 
-### Why this is advisory, not blocking
+### Why this is advisory, not critical
 
 A repo can have a perfect `.npmrc` / `pnpm-workspace.yaml` / `.yarnrc.yml`
 and still have one `npm install` hidden in a Dockerfile or a Tiltfile —
 that's the kind of thing that's easy to miss in review. Surfacing each
 occurrence as an advisory finding lets the team see the inventory
-without blocking merge. Promote to blocking on a per-repo basis once
+without blocking merge. Promote to critical on a per-repo basis once
 you've cleared the existing instances.
 
 ### Files scanned

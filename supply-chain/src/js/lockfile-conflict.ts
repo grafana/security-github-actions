@@ -9,13 +9,13 @@ const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/s
 export const check: NodeCheck = {
   ecosystem: 'js',
   id: CHECK_ID,
-  severity: 'blocking',
+  severity: 'critical',
   async run(root: NodeRoot): Promise<Finding[]> {
     if (root.lockfiles.length <= 1) return [];
     return [
       {
         check_id: CHECK_ID,
-        severity: 'blocking',
+        severity: 'critical',
         root: root.path,
         title: `Multiple lockfiles at the same root (${root.lockfiles.length})`,
         detail: `Found: ${root.lockfiles.join(', ')}. The supply-chain workflow refuses to guess which package manager rules apply.`,

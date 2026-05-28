@@ -18,26 +18,26 @@ export type ReportInput = {
 };
 
 export function renderMarkdown(input: ReportInput): string {
-  const blocking = input.findings.filter((f) => f.severity === 'blocking');
+  const critical = input.findings.filter((f) => f.severity === 'critical');
   const advisory = input.findings.filter((f) => f.severity === 'advisory');
   const passingIds = new Set<CheckId>(input.ran);
   for (const f of input.findings) passingIds.delete(f.check_id);
   for (const f of input.suppressed) passingIds.delete(f.check_id);
 
   const status =
-    blocking.length === 0
+    critical.length === 0
       ? `✅ Supply-chain checks passed (${advisory.length} advisory)`
-      : `❌ ${blocking.length} blocking, ${advisory.length} advisory`;
+      : `❌ ${critical.length} critical, ${advisory.length} advisory`;
 
   // All sections are collapsed by default. The status line at the top
-  // already shows the counts ("❌ 15 blocking, 2 advisory") which is the
+  // already shows the counts ("❌ 15 critical, 2 advisory") which is the
   // signal a reader scanning the PR comment / step summary needs first;
   // expanding a section is one click when they want the detail.
   const parts: string[] = [
     STICKY_MARKER,
     `## ${status}`,
     '',
-    section('Blocking violations', blocking, false),
+    section('Critical violations', critical, false),
     section('Advisory findings', advisory, false),
     section('Suppressed', input.suppressed, false),
     passingSection(input.ran, passingIds),

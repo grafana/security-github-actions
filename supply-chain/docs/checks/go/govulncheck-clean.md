@@ -42,7 +42,7 @@ A finding looks like:
 The doc link goes to **the OSV record's own URL** (`pkg.go.dev/vuln/...`)
 when available — that page has the upstream mitigation guidance.
 
-## Why this is advisory (not blocking)
+## Why this is advisory (not critical)
 
 Vulnerability databases are mutable. A vuln published overnight can take
 a previously-passing commit and make it fail with no code change. The

@@ -110,7 +110,7 @@ test('partition: future-dated suppression DOES suppress', () => {
 function finding(check_id: string): Finding {
   return {
     check_id,
-    severity: 'blocking',
+    severity: 'critical',
     root: '.',
     title: 't',
     detail: 'd',

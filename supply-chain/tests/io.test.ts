@@ -9,7 +9,7 @@ import { writePayload, readPayload, mergePayloads } from '../src/io.ts';
 import type { ReportPayload } from '../src/io.ts';
 import type { Finding } from '../src/types.ts';
 
-function finding(check_id: string, severity: 'blocking' | 'advisory', root = '.'): Finding {
+function finding(check_id: string, severity: 'critical' | 'advisory', root = '.'): Finding {
   return {
     check_id,
     severity,
@@ -34,8 +34,8 @@ test('write/read payload round-trips', async () => {
   const payload: ReportPayload = {
     source: 'static',
     ran: ['a', 'b'],
-    findings: [finding('a', 'blocking'), finding('b', 'advisory')],
-    suppressed: [finding('c', 'blocking')],
+    findings: [finding('a', 'critical'), finding('b', 'advisory')],
+    suppressed: [finding('c', 'critical')],
   };
   try {
     await writePayload(p, payload);
@@ -61,8 +61,8 @@ test('mergePayloads: findings and suppressions are concatenated', () => {
   const a: ReportPayload = {
     source: 'static',
     ran: ['a'],
-    findings: [finding('a', 'blocking')],
-    suppressed: [finding('b', 'blocking')],
+    findings: [finding('a', 'critical')],
+    suppressed: [finding('b', 'critical')],
   };
   const b: ReportPayload = {
     source: 'audit',

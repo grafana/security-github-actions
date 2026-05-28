@@ -18,7 +18,7 @@ const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/s
 export const check: NodeCheck = {
   ecosystem: 'js',
   id: CHECK_ID,
-  severity: 'blocking',
+  severity: 'critical',
   async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     const manifestPath = root.path === '.' ? 'package.json' : `${root.path}/package.json`;
     const text = await readFile(join(ctx.repoRoot, manifestPath), 'utf8');
@@ -29,7 +29,7 @@ export const check: NodeCheck = {
       return [
         {
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: 'Could not parse package.json',
           detail: `${manifestPath} is not valid JSON.`,
@@ -44,11 +44,11 @@ export const check: NodeCheck = {
       return [
         {
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: 'Missing `packageManager` field in package.json',
-          detail: `${manifestPath} does not declare a packageManager. Without it, we cannot determine which manager rules to apply.`,
-          fix: 'Add `"packageManager": "<name>@<version>"` (e.g. `"pnpm@11.0.0"`) to package.json.',
+          detail: `${manifestPath} does not pin a package manager. Without a pinned version, installs use whatever pnpm/npm/yarn happens to be on the runner — and older managers silently ignore the hardening config (e.g. pnpm < 10 ignores \`minimumReleaseAge\`, npm < 11.10 ignores \`min-release-age\`). The config in your repo looks correct but enforces nothing.`,
+          fix: 'Add `"packageManager": "<name>@<version>"` (e.g. `"pnpm@11.0.0"`) to package.json. Corepack will then install exactly that version with hash-verified integrity on every machine.',
           doc_link: DOC_LINK,
         },
       ];
@@ -59,7 +59,7 @@ export const check: NodeCheck = {
       return [
         {
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: 'Unrecognised `packageManager` value',
           detail: `${manifestPath} has packageManager="${pm}", which we cannot interpret. Expected one of: npm, pnpm, yarn.`,
@@ -74,7 +74,7 @@ export const check: NodeCheck = {
       return [
         {
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: `${parsedPm.name} pinned below minimum (${formatVersion(parsedPm.version)} < ${formatVersion(min)})`,
           detail: `Required security controls (e.g. release-age gates, git-dep blocking) are only available in ${parsedPm.name} ${formatVersion(min)}+.`,

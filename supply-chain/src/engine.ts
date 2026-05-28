@@ -103,7 +103,7 @@ export async function runChecks(
   for (const err of errors) {
     active.push({
       check_id: 'suppression-file-invalid',
-      severity: 'blocking',
+      severity: 'critical',
       root: '.',
       title: `Invalid suppression file: ${err.file}${err.line ? ` (line ${err.line})` : ''}`,
       detail: err.message,

@@ -1,6 +1,6 @@
 # `yarnrc-correct`
 
-**Severity:** blocking · **Applies to:** yarn roots
+**Severity:** critical · **Applies to:** yarn roots
 
 ## What this check verifies
 

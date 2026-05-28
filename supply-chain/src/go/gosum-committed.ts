@@ -11,7 +11,7 @@ const DOC_LINK = 'https://github.com/grafana/security-github-actions/blob/main/s
 export const check: GoCheck = {
   ecosystem: 'go',
   id: CHECK_ID,
-  severity: 'blocking',
+  severity: 'critical',
   async run(root: GoRoot, ctx: RepoContext): Promise<Finding[]> {
     if (!root.hasRequires) return [];
 
@@ -21,7 +21,7 @@ export const check: GoCheck = {
       return [
         {
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: 'Missing go.sum',
           detail: `Module ${describe(root)} declares external dependencies but has no go.sum.`,
@@ -35,7 +35,7 @@ export const check: GoCheck = {
       return [
         {
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title: 'go.sum present but not committed',
           detail: `${relPath} exists on disk but is not tracked by git. Likely .gitignore'd.`,

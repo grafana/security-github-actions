@@ -33,8 +33,8 @@
 // `cd supply-chain && npm run check` therefore checks the surrounding repo.
 //
 // Exit codes:
-//   0 — no blocking findings
-//   1 — at least one blocking finding
+//   0 — no critical findings
+//   1 — at least one critical finding
 //   2 — unexpected error
 
 import { spawn } from 'node:child_process';
@@ -190,8 +190,8 @@ async function main(): Promise<void> {
     }
   }
 
-  const blocking = result.active.filter((f) => f.severity === 'blocking');
-  if (blocking.length > 0) exit(1);
+  const critical = result.active.filter((f) => f.severity === 'critical');
+  if (critical.length > 0) exit(1);
 }
 
 main().catch((err) => {

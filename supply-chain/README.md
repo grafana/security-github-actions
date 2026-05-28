@@ -16,7 +16,7 @@ workspace member). Failures appear in:
 - the **GitHub Step Summary** of the workflow run, and
 - a **sticky PR comment** that updates on every push (see [milestone status](#milestones))
 
-If the workflow says you have a **blocking** finding, you must fix it (or
+If the workflow says you have a **critical** finding, you must fix it (or
 file a [suppression](#suppressions)) before merge. **Advisory** findings
 appear in the same comment but do not block merging.
 
@@ -26,7 +26,7 @@ You can also run the exact same checks on a local clone — no CI needed:
 
 ## What gets checked
 
-### Blocking (fail merge if violated)
+### Critical (fail merge if violated)
 
 | ID | What it checks |
 |---|---|
@@ -51,8 +51,8 @@ You can also run the exact same checks on a local clone — no CI needed:
 
 | ID | Severity | What it checks |
 |---|---|---|
-| `gosum-committed` | blocking | `go.sum` is present + tracked by git for any module with `require` entries. |
-| `go-toolchain-pinned` | blocking | `go.mod` declares a `toolchain` directive at Go ≥ 1.22.0; `go` directive also ≥ 1.22.0. |
+| `gosum-committed` | critical | `go.sum` is present + tracked by git for any module with `require` entries. |
+| `go-toolchain-pinned` | critical | `go.mod` declares a `toolchain` directive at Go ≥ 1.22.0; `go` directive also ≥ 1.22.0. |
 | `govulncheck-clean` | advisory | Surfaces **call-reachable** vulnerabilities from `govulncheck -json` (only flags vulns your code actually executes — not noisy graph-level reports). |
 
 See [docs/checks/](./docs/checks/) for the per-check fix guide. Each finding
@@ -119,7 +119,7 @@ The workflow ships incrementally. Where each capability is on the curve:
 | Capability | Status |
 |---|---|
 | Workspace-aware walker | ✅ shipped |
-| All blocking checks | ✅ shipped |
+| All critical checks | ✅ shipped |
 | Heuristic advisory checks (`install-not-ci`, `npx-confusion`, `oidc-publishing`, `cache-poisoning-publish`) | ✅ shipped |
 | Workflow file at `.github/workflows/supply-chain.yaml` | ✅ shipped |
 | Sticky PR comment | ✅ shipped |
@@ -186,8 +186,8 @@ Colors in terminal output honour `NO_COLOR` and `FORCE_COLOR` automatically.
 
 ### Exit codes
 
-- **0** — no blocking findings (advisory findings are allowed and printed)
-- **1** — at least one blocking finding
+- **0** — no critical findings (advisory findings are allowed and printed)
+- **1** — at least one critical finding
 - **2** — unexpected error (parse crash, etc.)
 
 ### Pre-rollout org survey
@@ -275,7 +275,7 @@ by **the same** `src/check.ts` invoked with different mode flags:
               ┌─────────────────────────────────────┐  static-findings.json
               │ static                               │
               │   check.ts --no-audit                │──────────────┐
-              │   (blocking → exit 1)                │              │
+              │   (critical → exit 1)                │              │
               └─────────────────────────────────────┘              ▼
 detect ──┬─►                                                 ┌──────────┐
          │    ┌─────────────────────────────────────┐        │ report   │
@@ -286,8 +286,8 @@ detect ──┬─►                                                 ┌──
                                                               + post-comment.ts
 ```
 
-- **`static`** runs `check.ts --no-audit`. Every non-network check across all roots. Its **non-zero exit on blocking findings is what fails the workflow** and gates merge. Writes `static-findings.json`.
-- **`audit`** runs `check.ts --audit-only`. Only `registry-audit`. **Always non-blocking** at the job level (`continue-on-error: true` — ADR-0001). Writes `audit-findings.json`.
+- **`static`** runs `check.ts --no-audit`. Every non-network check across all roots. Its **non-zero exit on critical findings is what fails the workflow** and gates merge. Writes `static-findings.json`.
+- **`audit`** runs `check.ts --audit-only`. Only `registry-audit`. **Always advisory** at the job level (`continue-on-error: true` — ADR-0001). Writes `audit-findings.json`.
 - **`report`** depends on `[static, audit]` with `if: always()`. Downloads both artifacts, runs `render-cli.ts` to merge the payloads and produce one markdown body, then `post-comment.ts` posts/updates the sticky PR comment.
 
 The same `check.ts` (with no flags) is what runs locally via `npm run check`. CI mode vs local mode is determined entirely by environment variables: if `SUPPLY_CHAIN_FINDINGS_OUT` or `GITHUB_STEP_SUMMARY` is set, it writes to those; otherwise it prints the rendered markdown to stdout.
@@ -324,7 +324,7 @@ contract with the org.
 
 The workflow is **not** referenced by the org ruleset yet. The rollout plan:
 
-1. Land milestones 1–3 (all blocking checks + suppression).
+1. Land milestones 1–3 (all critical checks + suppression).
 2. Run a one-off pre-flight: clone the top-N org repos and run the CLI
    against each from a developer laptop. Tally findings.
 3. Communicate the findings to affected teams with a deadline.

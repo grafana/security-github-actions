@@ -34,15 +34,15 @@ test('good-yarn: yarn.lock present => no findings', async () => {
   assert.deepEqual(await runFor('good-yarn'), []);
 });
 
-test('bad-missing-npm: no lockfile => one blocking finding', async () => {
+test('bad-missing-npm: no lockfile => one critical finding', async () => {
   const findings = await runFor('bad-missing-npm');
   assert.equal(findings.length, 1);
   assert.equal(findings[0]!.check_id, CHECK_ID);
-  assert.equal(findings[0]!.severity, 'blocking');
+  assert.equal(findings[0]!.severity, 'critical');
   assert.match(findings[0]!.title, /package-lock\.json/);
 });
 
-test('bad-missing-pnpm: no lockfile => one blocking finding mentioning pnpm-lock.yaml', async () => {
+test('bad-missing-pnpm: no lockfile => one critical finding mentioning pnpm-lock.yaml', async () => {
   const findings = await runFor('bad-missing-pnpm');
   assert.equal(findings.length, 1);
   assert.match(findings[0]!.detail, /pnpm/);

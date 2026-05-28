@@ -1,4 +1,4 @@
-# Single workflow file with two jobs (static-blocking + audit-advisory)
+# Single workflow file with two jobs (static-critical + audit-advisory)
 
 The supply-chain workflow ships as **one** workflow file (`.github/workflows/supply-chain.yaml`) containing two jobs: a static-check job that fails the workflow on violation (and therefore blocks merge via the org ruleset), and an `npm/pnpm audit` job with `continue-on-error: true` that runs at PR time and posts findings into the sticky PR comment without gating merge. We picked one file over two because the user wanted both checks to feel like the same surface; the cost is that `continue-on-error: true` on the audit job is the only line of defence against an advisory CVE turning into an org-wide merge freeze on a Friday afternoon.
 

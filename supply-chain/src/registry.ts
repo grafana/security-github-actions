@@ -26,10 +26,10 @@ import { check as goToolchainPinned } from './go/toolchain-pinned.ts';
 import { check as govulncheckClean } from './go/govulncheck-clean.ts';
 
 // Static checks: run in the `static` job at CI time (and locally by default).
-// Everything that doesn't need the network goes here — both blocking and
+// Everything that doesn't need the network goes here — both critical and
 // non-network advisory, both ecosystems.
 export const STATIC_CHECKS: Check[] = [
-  // JS blocking
+  // JS critical
   packagemanagerPinned,
   lockfileCommitted,
   lockfileConflict,
@@ -37,7 +37,7 @@ export const STATIC_CHECKS: Check[] = [
   pnpmWorkspaceCorrect,
   yarnrcCorrect,
 
-  // Go blocking
+  // Go critical
   gosumCommitted,
   goToolchainPinned,
 

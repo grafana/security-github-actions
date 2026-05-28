@@ -1,6 +1,6 @@
 # `npmrc-correct`
 
-**Severity:** blocking · **Applies to:** npm roots
+**Severity:** critical · **Applies to:** npm roots
 
 ## What this check verifies
 

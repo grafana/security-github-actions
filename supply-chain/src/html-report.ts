@@ -11,16 +11,16 @@ import type { Finding, CheckId } from './types.ts';
 import type { ReportInput } from './report.ts';
 
 export function renderHtml(input: ReportInput): string {
-  const blocking = input.findings.filter((f) => f.severity === 'blocking');
+  const critical = input.findings.filter((f) => f.severity === 'critical');
   const advisory = input.findings.filter((f) => f.severity === 'advisory');
   const passingIds = new Set<CheckId>(input.ran);
   for (const f of input.findings) passingIds.delete(f.check_id);
   for (const f of input.suppressed) passingIds.delete(f.check_id);
 
-  const overallOk = blocking.length === 0;
+  const overallOk = critical.length === 0;
   const title = overallOk
     ? `Supply-chain checks passed (${advisory.length} advisory)`
-    : `${blocking.length} blocking, ${advisory.length} advisory`;
+    : `${critical.length} critical, ${advisory.length} advisory`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -34,7 +34,7 @@ export function renderHtml(input: ReportInput): string {
   <header class="page-header ${overallOk ? 'ok' : 'fail'}">
     <h1>${overallOk ? '✓' : '✗'} ${esc(title)}</h1>
     <nav class="counts">
-      ${badge('blocking', blocking.length)}
+      ${badge('critical', critical.length)}
       ${badge('advisory', advisory.length)}
       ${badge('suppressed', input.suppressed.length)}
       ${badge('passing', passingIds.size)}
@@ -42,7 +42,7 @@ export function renderHtml(input: ReportInput): string {
   </header>
 
   <main>
-    ${section('blocking', 'Blocking violations', blocking, true)}
+    ${section('critical', 'Critical violations', critical, true)}
     ${section('advisory', 'Advisory findings', advisory, true)}
     ${section('suppressed', 'Suppressed', input.suppressed, false)}
     ${passingSection(input.ran, passingIds)}
@@ -54,7 +54,7 @@ export function renderHtml(input: ReportInput): string {
 `;
 }
 
-function badge(kind: 'blocking' | 'advisory' | 'suppressed' | 'passing', n: number): string {
+function badge(kind: 'critical' | 'advisory' | 'suppressed' | 'passing', n: number): string {
   if (n === 0) return '';
   const label = kind[0]!.toUpperCase() + kind.slice(1);
   return `<a href="#${kind}" class="badge badge-${kind}">${n} ${esc(label)}</a>`;
@@ -152,8 +152,8 @@ const CSS = `
     --border: #d0d7de;
     --code-bg: #eff1f3;
     --link: #0969da;
-    --blocking: #cf222e;
-    --blocking-bg: #ffebe9;
+    --critical: #cf222e;
+    --critical-bg: #ffebe9;
     --advisory: #9a6700;
     --advisory-bg: #fff8c5;
     --suppressed: #59636e;
@@ -170,8 +170,8 @@ const CSS = `
       --border: #30363d;
       --code-bg: #1f242c;
       --link: #4493f8;
-      --blocking: #f85149;
-      --blocking-bg: rgba(248,81,73,0.12);
+      --critical: #f85149;
+      --critical-bg: rgba(248,81,73,0.12);
       --advisory: #d29922;
       --advisory-bg: rgba(210,153,34,0.12);
       --suppressed: #8d96a0;
@@ -200,7 +200,7 @@ const CSS = `
   .page-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px; }
   .page-header h1 { margin: 0; font-size: 1.35em; font-weight: 600; }
   .page-header.ok h1 { color: var(--passing); }
-  .page-header.fail h1 { color: var(--blocking); }
+  .page-header.fail h1 { color: var(--critical); }
 
   .counts { display: flex; flex-wrap: wrap; gap: 6px; }
   .badge {
@@ -211,7 +211,7 @@ const CSS = `
     font-weight: 500;
     border: 1px solid transparent;
   }
-  .badge-blocking  { background: var(--blocking-bg);  color: var(--blocking);  border-color: var(--blocking); }
+  .badge-critical  { background: var(--critical-bg);  color: var(--critical);  border-color: var(--critical); }
   .badge-advisory  { background: var(--advisory-bg);  color: var(--advisory);  border-color: var(--advisory); }
   .badge-suppressed{ background: var(--suppressed-bg);color: var(--suppressed);border-color: var(--suppressed); }
   .badge-passing   { background: var(--passing-bg);   color: var(--passing);   border-color: var(--passing); }
@@ -274,7 +274,7 @@ const CSS = `
     column-gap: 8px;
     row-gap: 2px;
   }
-  .finding-blocking  { border-left-color: var(--blocking); }
+  .finding-critical  { border-left-color: var(--critical); }
   .finding-advisory  { border-left-color: var(--advisory); }
   .finding-suppressed{ border-left-color: var(--suppressed); opacity: 0.8; }
 

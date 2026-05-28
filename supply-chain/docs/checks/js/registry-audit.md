@@ -61,14 +61,14 @@ and never get fixed. Surfacing them all turns the comment into wallpaper
 and trains people to ignore it. High + critical is the threshold that
 typically maps to "real, exploitable risk in real applications."
 
-### Why this is advisory (not blocking)
+### Why this is advisory (not critical)
 
 Advisory databases are mutable. A CVE published overnight can take a
 previously-passing commit and make it fail — with no code change on
-the PR. Blocking on this would mean unrelated PRs go red on a Friday
+the PR. Critical on this would mean unrelated PRs go red on a Friday
 afternoon while the developer who wrote the PR has zero context for the
 failure. See [ADR-0001](../adr/0001-single-workflow-two-jobs.md) for the
-"static blocking, dynamic advisory" split rationale.
+"static critical, dynamic advisory" split rationale.
 
 ### Why this runs in its own CI job
 

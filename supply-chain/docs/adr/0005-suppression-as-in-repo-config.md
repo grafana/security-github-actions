@@ -1,6 +1,6 @@
 # Suppression lives in the target repo's `.github/supply-chain.yml`
 
-A repository that needs to opt a specific check out of blocking commits a `.github/supply-chain.yml` listing the suppressed `check_id`s. Each entry requires a free-text `reason:` and may carry an `expires:` ISO date (past which the suppression is ignored). Suppressed findings still surface in the report under a "Suppressed" section — they are never silently dropped, and the suppression file itself is auditable in git history.
+A repository that needs to opt a specific check out of critical severity commits a `.github/supply-chain.yml` listing the suppressed `check_id`s. Each entry requires a free-text `reason:` and may carry an `expires:` ISO date (past which the suppression is ignored). Suppressed findings still surface in the report under a "Suppressed" section — they are never silently dropped, and the suppression file itself is auditable in git history.
 
 ## Considered
 

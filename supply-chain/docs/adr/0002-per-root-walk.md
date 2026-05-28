@@ -6,4 +6,4 @@ Checks operate on **roots** — manifests that are not workspace members of any 
 
 - The walker must understand all three workspace conventions: npm `"workspaces": [...]`, yarn `"workspaces": [...]`, pnpm `pnpm-workspace.yaml`.
 - When a root contains more than one lockfile, it's a hard fail (lockfile conflict) — the workflow refuses to guess which manager rules apply.
-- The package manager for a root is determined by the `packageManager:` field; a missing field is itself a blocking finding (we don't fall back to lockfile detection).
+- The package manager for a root is determined by the `packageManager:` field; a missing field is itself a critical finding (we don't fall back to lockfile detection).

@@ -3,8 +3,8 @@
 #
 # Architecture (see supply-chain/docs/adr/0001 and 0007):
 #   1. `detect`   — cheap activation gate. Skips the rest if no package.json.
-#   2. `static`   — runs all blocking + non-network advisory checks. Its
-#                   non-zero exit on blocking findings is what gates merge.
+#   2. `static`   — runs all critical + non-network advisory checks. Its
+#                   non-zero exit on critical findings is what gates merge.
 #   3. `audit`    — runs the network-dependent registry-audit check. Always
 #                   advisory; continue-on-error is load-bearing per ADR-0001.
 #   4. `report`   — depends on `static` + `audit` (with `if: always()`),
@@ -91,7 +91,7 @@ jobs:
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SUPPLY_CHAIN_FINDINGS_OUT: ${{ runner.temp }}/static-findings.json
         # continue-on-error so the artifact upload still runs even when there
-        # are blocking findings; the "Enforce" step re-fails the job below.
+        # are critical findings; the "Enforce" step re-fails the job below.
         continue-on-error: true
         run: node --experimental-strip-types src/check.ts --no-audit "$GITHUB_WORKSPACE/target"
 
@@ -100,7 +100,7 @@ jobs:
         # see files inside the workspace, so using it here would always
         # return empty. Always-attempt + warn-on-missing is the correct
         # shape; the file should normally be present because the CLI
-        # writes it before exit even on blocking-finding paths.
+        # writes it before exit even on critical-finding paths.
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -112,9 +112,9 @@ jobs:
       - name: Enforce CLI exit code
         # Re-fails the job in lockstep with the CLI's exit code.
         # The CLI step uses `continue-on-error: true` so the artifact upload
-        # above can run unconditionally, even when there are blocking
+        # above can run unconditionally, even when there are critical
         # findings — without this final step, a failing CLI would mark the
-        # whole job green, which would silently allow merges with blocking
+        # whole job green, which would silently allow merges with critical-severity
         # findings present.
         if: ${{ steps.cli.outcome == 'failure' }}
         run: exit 1
@@ -183,7 +183,7 @@ jobs:
   report:
     name: Supply-chain attacks mitigation
     # `always()` so this runs even when `static` failed (the comment showing
-    # the blocking findings is the whole point). `detect` must still have
+    # the critical findings is the whole point). `detect` must still have
     # found something, otherwise we skip — no comment needed on non-Node repos.
     needs: [detect, static, audit]
     if: ${{ always() && needs.detect.outputs.found == 'true' }}

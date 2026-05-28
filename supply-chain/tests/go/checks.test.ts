@@ -32,7 +32,7 @@ test('gosum-committed: go.sum present with requires => no finding', async () => 
   assert.deepEqual(await runGosum('gosum-good'), []);
 });
 
-test('gosum-committed: go.sum missing with requires => blocking finding', async () => {
+test('gosum-committed: go.sum missing with requires => critical finding', async () => {
   const findings = await runGosum('gosum-missing');
   assert.equal(findings.length, 1);
   assert.equal(findings[0]!.check_id, 'gosum-committed');

@@ -16,7 +16,7 @@ export function renderText(input: ReportInput, opts: { useColor?: boolean } = {}
   // regardless of stream state (handy for snapshot tests).
   const c = palette(opts.useColor);
 
-  const blocking = input.findings.filter((f) => f.severity === 'blocking');
+  const critical = input.findings.filter((f) => f.severity === 'critical');
   const advisory = input.findings.filter((f) => f.severity === 'advisory');
   const passingIds = new Set<CheckId>(input.ran);
   for (const f of input.findings) passingIds.delete(f.check_id);
@@ -25,22 +25,22 @@ export function renderText(input: ReportInput, opts: { useColor?: boolean } = {}
   const lines: string[] = [];
 
   // Top-line status.
-  if (blocking.length === 0) {
+  if (critical.length === 0) {
     lines.push(
       c.green('✓ Supply-chain checks passed') +
         c.dim(` (${advisory.length} advisory, ${input.suppressed.length} suppressed)`),
     );
   } else {
     lines.push(
-      c.red(`✗ ${blocking.length} blocking`) +
+      c.red(`✗ ${critical.length} critical`) +
         c.dim(`, ${advisory.length} advisory, ${input.suppressed.length} suppressed`),
     );
   }
   lines.push('');
 
-  if (blocking.length > 0) {
-    lines.push(c.red(c.bold(`── Blocking violations (${blocking.length}) ──`)));
-    lines.push(...renderFindings(blocking, c, 'blocking'));
+  if (critical.length > 0) {
+    lines.push(c.red(c.bold(`── Critical violations (${critical.length}) ──`)));
+    lines.push(...renderFindings(critical, c, 'critical'));
     lines.push('');
   }
   if (advisory.length > 0) {
@@ -70,7 +70,7 @@ export function renderText(input: ReportInput, opts: { useColor?: boolean } = {}
 function renderFindings(
   findings: Finding[],
   c: Palette,
-  kind: 'blocking' | 'advisory' | 'suppressed',
+  kind: 'critical' | 'advisory' | 'suppressed',
 ): string[] {
   const byRoot = new Map<string, Finding[]>();
   for (const f of findings) {
@@ -79,7 +79,7 @@ function renderFindings(
     byRoot.set(f.root, list);
   }
   const out: string[] = [];
-  const marker = kind === 'blocking' ? c.red('✗') : kind === 'advisory' ? c.yellow('⚠') : c.dim('•');
+  const marker = kind === 'critical' ? c.red('✗') : kind === 'advisory' ? c.yellow('⚠') : c.dim('•');
   for (const [root, group] of byRoot) {
     out.push('');
     out.push('  ' + c.bold(root === '.' ? '(repo root)' : root));

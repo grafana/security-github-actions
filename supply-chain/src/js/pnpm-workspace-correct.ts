@@ -22,7 +22,7 @@ const REQUIRED: ReadonlyArray<{ key: string; expected: string; mode: CompareMode
 export const check: NodeCheck = {
   ecosystem: 'js',
   id: CHECK_ID,
-  severity: 'blocking',
+  severity: 'critical',
   async run(root: NodeRoot, ctx: RepoContext): Promise<Finding[]> {
     if (root.packageManager !== 'pnpm') return [];
 
@@ -55,7 +55,7 @@ export const check: NodeCheck = {
             : `Set \`${key}: ${expected}\` in ${relPath}.`;
         findings.push({
           check_id: CHECK_ID,
-          severity: 'blocking',
+          severity: 'critical',
           root: root.path,
           title,
           detail,
@@ -71,7 +71,7 @@ export const check: NodeCheck = {
 function missing(root: string, relPath: string, key: string, expected: string, detail: string): Finding {
   return {
     check_id: CHECK_ID,
-    severity: 'blocking',
+    severity: 'critical',
     root,
     title: `\`${key}\` not set in ${relPath}`,
     detail,

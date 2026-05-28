@@ -23,7 +23,7 @@ test('single lockfile: no finding', async () => {
   assert.deepEqual(await runFor(join(walkFixtures, 'single-with-lock')), []);
 });
 
-test('two lockfiles: one blocking finding', async () => {
+test('two lockfiles: one critical finding', async () => {
   const findings = await runFor(join(walkFixtures, 'lockfile-conflict'));
   assert.equal(findings.length, 1);
   assert.equal(findings[0]!.check_id, CHECK_ID);
