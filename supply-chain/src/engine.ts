@@ -85,10 +85,14 @@ async function loadTrackedFiles(repoRoot: string): Promise<Set<string> | null> {
   }
 }
 
-export function buildRunUrl(): string {
-  const server = env.GITHUB_SERVER_URL ?? 'https://github.com';
+// Returns the workflow-run URL when invoked from a real GitHub Actions run,
+// or `null` when invoked locally / outside CI. The renderers omit the
+// "Run: <url>" footer when this is null — a bare `https://github.com` link
+// would be noise in a terminal report.
+export function buildRunUrl(): string | null {
   const repo = env.GITHUB_REPOSITORY ?? '';
   const runId = env.GITHUB_RUN_ID ?? '';
-  if (repo && runId) return `${server}/${repo}/actions/runs/${runId}`;
-  return server;
+  if (!repo || !runId) return null;
+  const server = env.GITHUB_SERVER_URL ?? 'https://github.com';
+  return `${server}/${repo}/actions/runs/${runId}`;
 }

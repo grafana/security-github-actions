@@ -63,7 +63,7 @@ export function renderText(input: ReportInput, opts: { useColor?: boolean } = {}
     lines.push('');
   }
 
-  lines.push(c.dim(`Run: ${input.runUrl}`));
+  if (input.runUrl) lines.push(c.dim(`Run: ${input.runUrl}`));
   return lines.join('\n');
 }
 

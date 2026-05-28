@@ -12,8 +12,9 @@ export type ReportInput = {
   findings: Finding[];
   // Findings that matched a suppression entry (still reported, never silent).
   suppressed: Finding[];
-  // Link to the workflow run that produced this report.
-  runUrl: string;
+  // Link to the workflow run that produced this report, or `null` when
+  // invoked outside CI. Renderers omit the "Run:" footer when null.
+  runUrl: string | null;
 };
 
 export function renderMarkdown(input: ReportInput): string {
@@ -28,7 +29,7 @@ export function renderMarkdown(input: ReportInput): string {
       ? `✅ Supply-chain checks passed (${advisory.length} advisory)`
       : `❌ ${blocking.length} blocking, ${advisory.length} advisory`;
 
-  return [
+  const parts: string[] = [
     STICKY_MARKER,
     `## ${status}`,
     '',
@@ -36,9 +37,9 @@ export function renderMarkdown(input: ReportInput): string {
     section('Advisory findings', advisory, true),
     section('Suppressed', input.suppressed, false),
     passingSection(input.ran, passingIds),
-    '',
-    `<sub>[workflow run](${input.runUrl})</sub>`,
-  ].join('\n');
+  ];
+  if (input.runUrl) parts.push('', `<sub>[workflow run](${input.runUrl})</sub>`);
+  return parts.join('\n');
 }
 
 function section(title: string, findings: Finding[], expanded: boolean): string {
