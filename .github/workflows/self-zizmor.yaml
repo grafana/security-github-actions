@@ -30,13 +30,13 @@ jobs:
           if [ -n "$SEARCH" ]; then
               FOUND_FILES=true
           fi
-          echo "found-files=${FOUND_FILES}" >> $GITHUB_OUTPUT
+          echo "found-files=${FOUND_FILES}" >> "$GITHUB_OUTPUT"
   zizmor:
     name: Run zizmor
 
     permissions:
       actions: read
-      contents: read
+      contents: write
       id-token: write
       pull-requests: write
       security-events: write
@@ -45,7 +45,7 @@ jobs:
       - zizmor-check
     if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@638f24848a49edb0bd14f771b6dd37b4455f1591
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@59249e1e64022197bce704dcbe1546413e23ba2c
     with:
       runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # grafana private repos use self-hosted ARM64; other orgs use ubuntu-latest
       fail-severity: high
@@ -54,4 +54,6 @@ jobs:
       extra-args: --offline
       # Reusable workflow gates bench job on org + non-fork PR (OIDC/Vault not available on fork PRs); pass true to opt in.
       send-bench-metrics: true
+      auto-delete-dangerous-branches: true
+      auto-delete-slack-channel-id: C011GT1NESU
     secrets: inherit

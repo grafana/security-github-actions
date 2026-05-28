@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: grafana/security-github-actions
-          ref: ${{ github.repository == 'grafana/security-github-actions' && (github.head_ref || github.ref_name) || '' }}
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref || github.ref_name) || 'main' }}
           sparse-checkout: |
             semgrep/custom-rules.yaml
             semgrep/format-results.sh
@@ -55,7 +55,7 @@ jobs:
             echo "has_high_critical=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - if: steps.semgrep.outputs.has_findings == 'true'
+      - if: steps.semgrep.outputs.has_findings == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         uses: int128/comment-action@66317511bc86c47bd51e03059040e8a460a167b8
         with:
           update-if-exists: recreate
