@@ -74,8 +74,12 @@ jobs:
       - name: Checkout security-github-actions
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
-          repository: grafana/security-github-actions
-          ref: main
+          # Self-PRs to this repo run with whatever CLI is on the PR's
+          # head (so changes to supply-chain/ are tested by the PR that
+          # changes them). All other contexts — push to main, required-
+          # workflow runs on other repos — use main.
+          repository: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.repo.full_name) || 'grafana/security-github-actions' }}
+          ref: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.sha) || 'main' }}
           path: security-github-actions
           persist-credentials: false
 
@@ -137,8 +141,12 @@ jobs:
       - name: Checkout security-github-actions
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
-          repository: grafana/security-github-actions
-          ref: main
+          # Self-PRs to this repo run with whatever CLI is on the PR's
+          # head (so changes to supply-chain/ are tested by the PR that
+          # changes them). All other contexts — push to main, required-
+          # workflow runs on other repos — use main.
+          repository: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.repo.full_name) || 'grafana/security-github-actions' }}
+          ref: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.sha) || 'main' }}
           path: security-github-actions
           persist-credentials: false
 
@@ -195,8 +203,12 @@ jobs:
       - name: Checkout security-github-actions
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
-          repository: grafana/security-github-actions
-          ref: main
+          # Self-PRs to this repo run with whatever CLI is on the PR's
+          # head (so changes to supply-chain/ are tested by the PR that
+          # changes them). All other contexts — push to main, required-
+          # workflow runs on other repos — use main.
+          repository: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.repo.full_name) || 'grafana/security-github-actions' }}
+          ref: ${{ (github.repository == 'grafana/security-github-actions' && github.event.pull_request.head.sha) || 'main' }}
           path: security-github-actions
           persist-credentials: false
 
