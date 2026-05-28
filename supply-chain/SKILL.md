@@ -1,11 +1,11 @@
 ---
-name: supply-chain
-description: Run the grafana org's supply-chain checks against a Node.js repository and apply the suggested fixes. Use when the user says "check supply chain", "fix supply chain", "audit supply chain", "/check-npm", "/supply-chain", or asks about Node.js supply-chain hardening for a specific repo. The skill wraps `npm run check` in `grafana/security-github-actions/supply-chain/` and walks the agent through fixing each finding.
+name: mitigate-supply-chain
+description: Run the grafana org's supply-chain checks against a Node.js or Go repository and apply the suggested fixes. Use when the user says "check supply chain", "fix supply chain", "audit supply chain", "mitigate supply chain", "/mitigate-supply-chain", or "/check-npm" (legacy alias), or asks about supply-chain hardening for a specific repo. The skill wraps `npm run check` in `grafana/security-github-actions/supply-chain/` and walks the agent through fixing each finding.
 ---
 
 # Supply-chain check & fix
 
-Run the supply-chain check against a target Node.js repository and walk the user through fixing every critical and advisory finding.
+Run the supply-chain check against a target repository (Node.js, Go, or both) and walk the user through fixing every critical and advisory finding.
 
 ## Locate the CLI
 
@@ -22,7 +22,11 @@ Verify `package.json` and `src/check.ts` exist under the CLI dir. If `node_modul
 
 First positional argument the user provides → resolve to absolute path. If they gave none, use the current working directory.
 
-If the target has no `package.json` anywhere, the CLI exits cleanly with "checks skipped." Report that and stop — there's nothing to do.
+The CLI activates if **either** ecosystem signal is present:
+- JS: any `package.json` in the tree
+- Go: any `go.mod` in the tree
+
+If neither exists, the CLI exits cleanly with "checks skipped." Report that and stop — there's nothing to do. A repo can have both ecosystems; checks for each apply independently to their own roots.
 
 ## Run the check
 
