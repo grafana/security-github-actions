@@ -45,6 +45,7 @@ import { renderMarkdown } from './report.ts';
 import { renderText } from './text-report.ts';
 import { runChecks, buildRunUrl } from './engine.ts';
 import { writePayload } from './io.ts';
+import { makeProgressCallback } from './progress.ts';
 import { STATIC_CHECKS, AUDIT_CHECKS, ALL_CHECKS } from './registry.ts';
 import type { Check } from './types.ts';
 import type { ReportPayload } from './io.ts';
@@ -95,7 +96,8 @@ async function main(): Promise<void> {
 
   stderr.write(`supply-chain: checking ${target} (${mode})\n`);
 
-  const result = await runChecks(target, checks);
+  const onProgress = makeProgressCallback(stderr);
+  const result = await runChecks(target, checks, onProgress);
 
   if (result.rootCount === 0) {
     stdout.write('No package.json found; supply-chain checks skipped.\n');
