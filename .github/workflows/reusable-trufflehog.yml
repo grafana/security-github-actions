@@ -350,6 +350,34 @@ jobs:
             fi
           } > trufflehog_scan.txt
 
+      - name: Sanitize results for artifacts and bench
+        if: always()
+        run: |
+          if [[ -f results.json && -s results.json ]] && jq empty results.json 2>/dev/null; then
+            jq '[.[] | {
+              SourceMetadata,
+              SourceID,
+              SourceType,
+              SourceName,
+              DetectorType,
+              DetectorName,
+              DetectorDescription,
+              DecoderName,
+              Verified,
+              VerificationFromCache,
+              ExtraData: (
+                if (.ExtraData | type) == "object" then
+                  .ExtraData | with_entries(select(.key == "username" or .key == "name" or .key == "url"))
+                else
+                  {}
+                end
+              )
+            }]' results.json > results-sanitized.json
+          else
+            echo "[]" > results-sanitized.json
+          fi
+          rm -f results.json results.ndjson
+
       - name: Copy exclude file into workspace for artifact upload
         if: always()
         run: cp /tmp/trufflehog-exclude.txt trufflehog-exclude.txt 2>/dev/null || true
@@ -361,7 +389,7 @@ jobs:
           name: trufflehog_scan
           path: |
             trufflehog_scan.txt
-            results.json
+            results-sanitized.json
             trufflehog-exclude.txt
           if-no-files-found: warn
           retention-days: 2
@@ -446,4 +474,4 @@ jobs:
             --log-level debug \
             --prometheus-metrics \
             ${EXCLUDE_FLAG} \
-            /tests/results.json
+            /tests/results-sanitized.json
