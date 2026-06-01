@@ -15,7 +15,7 @@ jobs:
     name: Check whether there are things to scan
     permissions:
       contents: read
-    runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # grafana private repos use self-hosted ARM64; other orgs use ubuntu-latest
+    runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }} # grafana private repos use self-hosted ARM64; other orgs use ubuntu-latest
     outputs:
       found-files: ${{ steps.zizmor-check.outputs.found-files }}
     steps:
@@ -47,7 +47,7 @@ jobs:
 
     uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@acf6456bac4ea5991c8b1c4466b85e8b94d9a542
     with:
-      runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # grafana private repos use self-hosted ARM64; other orgs use ubuntu-latest
+      runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }} # grafana private repos use self-hosted ARM64; other orgs use ubuntu-latest
       fail-severity: high
       min-severity: high
       min-confidence: low
@@ -55,5 +55,5 @@ jobs:
       # Reusable workflow gates bench job on org + non-fork PR (OIDC/Vault not available on fork PRs); pass true to opt in.
       send-bench-metrics: true
       auto-delete-dangerous-branches: true
-      auto-delete-slack-channel-id: C011GT1NESU
+      auto-delete-slack-channel-id: C0B7DLH818A
     secrets: inherit
