@@ -21,7 +21,7 @@ permissions:
 jobs:
   secret-scan:
     name: TruffleHog Secret Scan
-    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@main
+    uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@4906417cfdf415d795f4c7f9dd83674bb7fb2d50 # main
     with:
       # Non-blocking: job succeeds; PR still gets comments/artifacts when findings exist
       fail-on-verified: "false"      # Set "true" to fail on verified secrets
