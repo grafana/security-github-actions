@@ -1,11 +1,7 @@
 rules:
-  unpinned-uses:
+  dependabot-cooldown:
     config:
-      policies:
-        "*": hash-pin
-        actions/*: any
-        github/*: any
-        grafana/*: any
+      days: 3 # Match our Renovate config
   forbidden-uses:
     config:
       deny:
@@ -14,3 +10,10 @@ rules:
         # https://nvd.nist.gov/vuln/detail/cve-2025-30066
         # https://nvd.nist.gov/vuln/detail/cve-2025-30154
         - reviewdog/*
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin
+        actions/*: any
+        github/*: any
+        grafana/*: any
