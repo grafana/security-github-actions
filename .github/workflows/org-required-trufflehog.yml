@@ -26,5 +26,5 @@ jobs:
       # Non-blocking: job succeeds; PR still gets comments/artifacts when findings exist
       fail-on-verified: "false"      # Set "true" to fail on verified secrets
       fail-on-unverified: "false"    # Set "true" to fail on unverified secrets
-      runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-arm64-small' }}    # grafana private repos use self-hosted ARM64; other orgs use ubuntu-latest
+      runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }}    # grafana private repos use self-hosted runners (any arch, medium or smaller); other orgs use ubuntu-latest
     secrets: inherit
