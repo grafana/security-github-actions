@@ -29,3 +29,7 @@ grafana\.json$
 
 # Grafana dashboards (user-supplied site content, full of base64/hashes)
 content/grafana/dashboards
+
+# Yarn 4 release bundle (corepack-vendored, minified — fires false positives
+# on `npmPublishProvenance` near internal mentions of GitLab; not user code)
+\.yarn/releases/
