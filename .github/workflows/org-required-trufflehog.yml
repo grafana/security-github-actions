@@ -23,8 +23,8 @@ jobs:
     name: TruffleHog Secret Scan
     uses: grafana/security-github-actions/.github/workflows/reusable-trufflehog.yml@0380389a5fad89a566ff9c2eb6ccc402c629e69d # main
     with:
-      # Non-blocking: job succeeds; PR still gets comments/artifacts when findings exist
-      fail-on-verified: "false"      # Set "true" to fail on verified secrets
-      fail-on-unverified: "false"    # Set "true" to fail on unverified secrets
+      # Blocking: verified secrets fail the required workflow; unverified stay comments-only
+      fail-on-verified: "true"       # Block PRs with verified secrets
+      fail-on-unverified: "false"    # Don't block on unverified secrets
       runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }}    # grafana private repos use self-hosted runners (any arch, medium or smaller); other orgs use ubuntu-latest
     secrets: inherit
