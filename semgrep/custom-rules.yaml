@@ -11,18 +11,21 @@ rules:
       approved [alternative for generating GitHub App tokens](https://enghub.grafana-ops.net/docs/default/component/deployment-tools/platform/vault/github-app-token-broker-migration-guide/).
     languages: [generic]
     severity: LOW
-  - id: deny-outdated-create-github-app-token-versions
+  # Incident-cleanup rule: can be removed once all repos are on a fixed
+  # create-github-app-token release. Allowlist by design; the org-level
+  # Actions policy remains the enforcement mechanism.
+  - id: require-current-create-github-app-token
     patterns:
-      - pattern-regex: "uses:\\s*grafana/shared-workflows/actions/create-github-app-token@(v0\\.2(\\.[0-3])?\\b|v0\\.3\\.0\\b|795f748a236f9de024b7514efc9a208456e7e468|259ba21cb3ff07724f331e26d926d655d24b317b|ae92934a14a48b94494dbc06d74a81d47fe08a40|a5556630f6557d54926f9e2b63e68702a1684315|eb02241ed0a92aff205feab8ac3afcdf51c757c8)"
+      - pattern-regex: "uses:\\s*grafana/shared-workflows/actions/create-github-app-token@(?!46f48da11e78ebdba7a8747ae456b11062fac83e)"
     paths:
       include:
         - "*.yaml"
         - "*.yml"
     message: >
-      This version of grafana/shared-workflows/actions/create-github-app-token
-      is outdated and has been disabled at the organization level; workflows
-      using it will fail at runtime. Update to
-      grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e
-      (create-github-app-token/v0.3.1) or later.
+      Pin grafana/shared-workflows/actions/create-github-app-token to
+      46f48da11e78ebdba7a8747ae456b11062fac83e (create-github-app-token/v0.3.1)
+      or a newer release SHA. Older references are disabled by the organization's
+      Actions policy and will fail at runtime. If you are pinning a release newer
+      than v0.3.1, add its SHA to the allowlist in this rule.
     languages: [generic]
     severity: HIGH
