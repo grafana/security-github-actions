@@ -105,6 +105,40 @@ jobs:
           echo "--- effective exclude patterns ---"
           cat "${DEST}"
 
+      - name: Fetch org-wide TruffleHog custom detectors
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          DEST=/tmp/trufflehog-custom-detectors.yaml
+          REPO=grafana/security-github-actions
+          FILE_PATH=trufflehog/custom-detectors.yaml
+
+          # Resolve the ref the calling workflow used (e.g. @main, @feature/branch, @v1).
+          CALLER_REF="main"
+          if [[ -n "${WORKFLOW_REF}" ]]; then
+            CALLER_REF=$(echo "${WORKFLOW_REF}" | sed 's|.*@||; s|^refs/heads/||; s|^refs/tags/||')
+          fi
+
+          LOADED=false
+          for REF in main "${CALLER_REF}"; do
+            [[ "$LOADED" == "true" ]] && break
+            if gh api "repos/${REPO}/contents/${FILE_PATH}?ref=${REF}" \
+                -H "Accept: application/vnd.github.v3.raw" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+              echo "Loaded custom detectors from ${REPO}@${REF} (GitHub API)"
+              LOADED=true
+            elif curl -fsSL "https://raw.githubusercontent.com/${REPO}/${REF}/${FILE_PATH}" \
+                -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
+              echo "Loaded custom detectors from raw.githubusercontent.com@${REF}"
+              LOADED=true
+            fi
+          done
+
+          if [[ "$LOADED" != "true" ]]; then
+            echo "::warning::Could not fetch TruffleHog custom detectors from ${REPO} (tried main and ${CALLER_REF}). Scanning with built-in detectors only."
+            rm -f "${DEST}"
+          fi
+
       - name: Install TruffleHog
         run: |
           # Download binary directly from GitHub releases for supply chain security
@@ -136,6 +170,12 @@ jobs:
 
           # Extract non-comment, non-blank patterns for the shell pre-filter.
           grep -vE '^\s*#|^\s*$' /tmp/trufflehog-exclude.txt > /tmp/exclude-regexes.txt 2>/dev/null || true
+
+          # Org-wide custom detectors (optional; scan proceeds without them if the fetch failed).
+          CONFIG_FLAG=""
+          if [[ -s /tmp/trufflehog-custom-detectors.yaml ]]; then
+            CONFIG_FLAG="--config /tmp/trufflehog-custom-detectors.yaml"
+          fi
 
           if [[ "${EVENT_NAME}" == "pull_request" ]] || [[ "${EVENT_NAME}" == "merge_group" ]]; then
             if [[ "${EVENT_NAME}" == "pull_request" ]]; then
@@ -169,6 +209,7 @@ jobs:
                 trufflehog filesystem . \
                   --include-paths "${INCLUDE_REGEXES}" \
                   --exclude-paths /tmp/trufflehog-exclude.txt \
+                  ${CONFIG_FLAG} \
                   --concurrency 16 \
                   --json \
                   --no-update \
@@ -181,7 +222,7 @@ jobs:
             fi
           else
             echo "Scanning current filesystem..."
-            trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
+            trufflehog filesystem . --exclude-paths /tmp/trufflehog-exclude.txt ${CONFIG_FLAG} --concurrency 16 --json --no-update --results=verified,unverified > results.ndjson || true
           fi
 
           # Process results and filter git hashes from CHANGELOG files
@@ -273,7 +314,7 @@ jobs:
             FINDINGS=$(jq -r '.[] |
               "- " +
               (if .Verified then "**VERIFIED SECRET**" else "**Possible secret**" end) +
-              " (" + .DetectorName + ") at `" +
+              " (" + .DetectorName + ((.ExtraData.name? // "") | if length > 0 then ": " + . else "" end) + ") at `" +
               (((try .SourceMetadata.Data.Filesystem.file catch null) // (try .SourceMetadata.Data.Git.file catch null)) // "unknown") +
               ":" +
               (((try .SourceMetadata.Data.Filesystem.line catch null) // (try .SourceMetadata.Data.Git.line catch null)) | tostring) +
@@ -344,7 +385,7 @@ jobs:
             echo ""
             echo "Detailed Results:"
             if [[ -f "results.json" && -s "results.json" ]] && jq empty results.json 2>/dev/null; then
-              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + " at " + (((try .SourceMetadata.Data.Filesystem.file catch null) // (try .SourceMetadata.Data.Git.file catch null)) // "unknown") + ":" + (((try .SourceMetadata.Data.Filesystem.line catch null) // (try .SourceMetadata.Data.Git.line catch null)) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' results.json 2>/dev/null || echo "Error processing results"
+              jq -r '.[] | "- " + (if .Verified then "VERIFIED" else "Unverified" end) + " " + .DetectorName + ((.ExtraData.name? // "") | if length > 0 then ": " + . else "" end) + " at " + (((try .SourceMetadata.Data.Filesystem.file catch null) // (try .SourceMetadata.Data.Git.file catch null)) // "unknown") + ":" + (((try .SourceMetadata.Data.Filesystem.line catch null) // (try .SourceMetadata.Data.Git.line catch null)) | tostring) + " → " + (if (.Raw | length) > 8 then (.Raw[:4] + "***" + .Raw[-4:]) else "***" end)' results.json 2>/dev/null || echo "Error processing results"
             else
               echo "No secrets detected"
             fi

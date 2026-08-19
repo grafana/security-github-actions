@@ -1,0 +1,13 @@
+# Org-wide custom TruffleHog detectors, fetched at scan time by
+# .github/workflows/reusable-trufflehog.yml. Complements the built-in
+# detectors for formats the pinned TruffleHog release does not cover yet.
+detectors:
+  # GitHub App installation tokens in the JWT-based format
+  # (ghs_<app id>_<JWT>, ~520 chars, variable length). See:
+  # https://github.blog/changelog/2026-04-24-notice-about-upcoming-new-format-for-github-app-installation-tokens/
+  # Remove once the pinned TruffleHog release detects this format natively.
+  - name: github-app-installation-token-jwt
+    keywords:
+      - ghs_
+    regex:
+      token: 'ghs_[0-9]+_eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
