@@ -58,7 +58,7 @@ jobs:
         run: git fetch --depth=1 origin "${MERGE_GROUP_BASE_SHA}" "${MERGE_GROUP_HEAD_SHA}"
 
       - name: Remove persisted credentials
-        run: git config --unset-all http.https://github.com/.extraheader
+        run: git config --unset-all http.https://github.com/.extraheader || true
 
       - name: Fetch org-wide TruffleHog exclude patterns
         env:
