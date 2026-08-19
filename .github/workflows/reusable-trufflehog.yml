@@ -23,6 +23,11 @@ on:
         required: false
         default: true
         type: boolean
+      custom-detectors-ref:
+        description: "Git ref in grafana/security-github-actions to fetch trufflehog/custom-detectors.yaml from. Tried before main. Leave empty for org-wide (loads from main)."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -109,20 +114,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW_REF: ${{ github.workflow_ref }}
+          DETECTORS_REF: ${{ inputs.custom-detectors-ref }}
         run: |
           DEST=/tmp/trufflehog-custom-detectors.yaml
           REPO=grafana/security-github-actions
           FILE_PATH=trufflehog/custom-detectors.yaml
 
-          # Resolve the ref the calling workflow used (e.g. @main, @feature/branch, @v1).
+          # github.workflow_ref is the *caller* (e.g. a consumer PR merge ref), not
+          # this reusable workflow's branch. Prefer an explicit input for pre-merge tests.
           CALLER_REF="main"
           if [[ -n "${WORKFLOW_REF}" ]]; then
             CALLER_REF=$(echo "${WORKFLOW_REF}" | sed 's|.*@||; s|^refs/heads/||; s|^refs/tags/||')
           fi
 
+          REFS=()
+          if [[ -n "${DETECTORS_REF}" ]]; then
+            REFS+=("${DETECTORS_REF}")
+          fi
+          REFS+=("main")
+          if [[ -n "${CALLER_REF}" && "${CALLER_REF}" != "main" && "${CALLER_REF}" != "${DETECTORS_REF}" ]]; then
+            REFS+=("${CALLER_REF}")
+          fi
+
           LOADED=false
-          for REF in main "${CALLER_REF}"; do
+          TRIED=""
+          for REF in "${REFS[@]}"; do
             [[ "$LOADED" == "true" ]] && break
+            TRIED="${TRIED} ${REF}"
             if gh api "repos/${REPO}/contents/${FILE_PATH}?ref=${REF}" \
                 -H "Accept: application/vnd.github.v3.raw" -o "${DEST}" 2>/dev/null && [[ -s "${DEST}" ]]; then
               echo "Loaded custom detectors from ${REPO}@${REF} (GitHub API)"
@@ -135,7 +153,7 @@ jobs:
           done
 
           if [[ "$LOADED" != "true" ]]; then
-            echo "::warning::Could not fetch TruffleHog custom detectors from ${REPO} (tried main and ${CALLER_REF}). Scanning with built-in detectors only."
+            echo "::warning::Could not fetch TruffleHog custom detectors from ${REPO} (tried${TRIED}). Scanning with built-in detectors only."
             rm -f "${DEST}"
           fi
 
