@@ -1,0 +1,56 @@
+# Org-wide custom TruffleHog detectors, fetched at scan time by
+# .github/workflows/reusable-trufflehog.yml. Complements the built-in
+# detectors for formats the pinned TruffleHog release does not cover yet.
+#
+# Custom detectors are regex-only unless a verify webhook is configured.
+# Without verify, matches are unverified (PR comments, do not block merge).
+detectors:
+  # GitHub App installation tokens in the JWT-based format
+  # (ghs_<app id>_<JWT>, ~520 chars, variable length). See:
+  # https://github.blog/changelog/2026-04-24-notice-about-upcoming-new-format-for-github-app-installation-tokens/
+  # Remove once the pinned TruffleHog release detects this format natively.
+  - name: github-app-installation-token-jwt
+    keywords:
+      - ghs_
+    regex:
+      token: 'ghs_[0-9]+_eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
+
+  # Grafana Cloud prod tokens that are not the JWT-shaped glc_eyJ keys
+  # already covered by the built-in Grafana detector.
+  # From grafana/pii-secret-research .betterleaks.toml (no CEL verify here).
+  # exclude_words is a case-insensitive contains() on a lowercased token, so
+  # these values must be lowercase or they will not match.
+  - name: grafana-cloud-api-token
+    keywords:
+      - glc_
+    exclude_words:
+      - glc_eyj
+      - glc_dev_
+      - glc_ops_
+    regex:
+      token: '\b(glc_[A-Za-z0-9+/]{32,400}={0,3})'
+
+  # Grafana Cloud dev tokens (glc_dev_). Not in upstream TruffleHog.
+  - name: grafana-cloud-dev-api-token
+    keywords:
+      - glc_dev_
+    regex:
+      token: '\b(glc_dev_[A-Za-z0-9_+/=-]{20,})\b'
+
+  # Grafana Cloud ops tokens (glc_ops_). Not in upstream TruffleHog.
+  - name: grafana-cloud-ops-api-token
+    keywords:
+      - glc_ops_
+    regex:
+      token: '\b(glc_ops_[A-Za-z0-9_+/=-]{20,})\b'
+
+  # SA tokens next to grafana-ops.net / grafana-dev.net in the same chunk.
+  # Built-in GrafanaServiceAccount already covers glsa_ + *.grafana.net.
+  # Both named regexes must match. Raw is token then url (sorted key names).
+  - name: grafana-service-account-token-ops-dev
+    keywords:
+      - glsa_
+    primary_regex_name: token
+    regex:
+      token: '\b(glsa_[A-Za-z0-9_+/=-]{20,})\b'
+      url: '\b([a-zA-Z0-9-]+\.grafana-(?:ops|dev)\.net)\b'
