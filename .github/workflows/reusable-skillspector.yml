@@ -1,0 +1,195 @@
+name: Reusable SkillSpector static scan
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Select the runner label for the scan and comment jobs.
+        required: false
+        default: ubuntu-latest
+        type: string
+      min-confidence:
+        description: Set the minimum confidence from 0.0 through 1.0 for HIGH and CRITICAL findings.
+        required: false
+        default: 0.8
+        type: number
+      fail-on-findings:
+        description: Fail the scan when the policy selects one or more findings.
+        required: false
+        default: true
+        type: boolean
+      comment-on-pr:
+        description: Add one pull request comment when the policy selects findings.
+        required: false
+        default: true
+        type: boolean
+    outputs:
+      finding-count:
+        description: This value is the number of findings that the action policy selected.
+        value: ${{ jobs.skillspector.outputs.finding-count }}
+      skill-count:
+        description: This value is the number of skills in the pull request head.
+        value: ${{ jobs.skillspector.outputs.skill-count }}
+
+permissions: {}
+
+concurrency:
+  group: skillspector-${{ github.workflow }}-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skillspector:
+    name: Scan agent skills
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      scan-complete: ${{ steps.skillspector.outputs.scan-complete }}
+      finding-count: ${{ steps.skillspector.outputs.finding-count }}
+      skill-count: ${{ steps.skillspector.outputs.skill-count }}
+
+    steps:
+      - name: Check out the head tree
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          path: target
+          persist-credentials: false
+
+      - name: Check out the base tree
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          path: base
+          persist-credentials: false
+
+      - name: Check out the workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          sparse-checkout: skillspector
+          path: workflow-source
+          persist-credentials: false
+
+      - name: Run SkillSpector
+        id: skillspector
+        uses: ./workflow-source/skillspector
+        with:
+          head-path: target
+          base-path: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && 'base' || '' }}
+          head-sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          min-confidence: ${{ inputs.min-confidence }}
+          fail-on-findings: "false"
+          annotation-level: ${{ inputs.fail-on-findings && 'error' || 'warning' }}
+
+      - name: Upload the sanitized scan report
+        if: steps.skillspector.outputs.scan-complete == 'true'
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        with:
+          name: skillspector-static-report
+          path: |
+            ${{ steps.skillspector.outputs.report-path }}
+            ${{ steps.skillspector.outputs.comment-path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Apply the merge policy
+        if: inputs.fail-on-findings && steps.skillspector.outputs.finding-count != '0'
+        env:
+          FINDING_COUNT: ${{ steps.skillspector.outputs.finding-count }}
+        run: |
+          finding_word="findings"
+          review_verb="require"
+          if [[ "${FINDING_COUNT}" == "1" ]]; then
+            finding_word="finding"
+            review_verb="requires"
+          fi
+          echo "::error::The SkillSpector policy found ${FINDING_COUNT} ${finding_word} that ${review_verb} review."
+          exit 1
+
+  comment:
+    name: Update the pull request comment
+    needs: skillspector
+    if: >-
+      ${{
+        always() &&
+        needs.skillspector.outputs.scan-complete == 'true' &&
+        github.event_name == 'pull_request' &&
+        inputs.comment-on-pr &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      }}
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write # Update or remove one bot-authored pull request comment.
+
+    steps:
+      - name: Download the sanitized scan report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: skillspector-static-report
+          path: .skillspector-report
+
+      - name: Update the SkillSpector comment
+        continue-on-error: true
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          report_file=".skillspector-report/skillspector-results.json"
+          comment_file=".skillspector-report/skillspector-comment.md"
+          marker='<!-- skillspector-static-scan -->'
+
+          report_head_sha=$(jq -er '.head_sha' "${report_file}")
+          finding_count=$(jq -er '.finding_count' "${report_file}")
+          if [[ "${report_head_sha}" != "${EXPECTED_HEAD_SHA}" ]]; then
+            echo "::warning::The SkillSpector report does not match the pull request head. The workflow did not change the comment."
+            exit 0
+          fi
+
+          current_head_sha=$(gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          if [[ "${current_head_sha}" != "${EXPECTED_HEAD_SHA}" ]]; then
+            echo "::warning::The pull request head changed during the scan. The workflow did not change the comment."
+            exit 0
+          fi
+
+          comments_file=$(mktemp)
+          gh api --paginate "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- skillspector-static-scan -->")) | .id' \
+            > "${comments_file}"
+          mapfile -t comment_ids < "${comments_file}"
+
+          if [[ "${finding_count}" == "0" ]]; then
+            for comment_id in "${comment_ids[@]}"; do
+              gh api --method DELETE "repos/${REPOSITORY}/issues/comments/${comment_id}"
+            done
+            exit 0
+          fi
+
+          body_file=$(mktemp)
+          payload_file=$(mktemp)
+          cp "${comment_file}" "${body_file}"
+          printf '\n%s\n' "${marker}" >> "${body_file}"
+          jq -Rs '{body: .}' "${body_file}" > "${payload_file}"
+
+          if [[ ${#comment_ids[@]} -eq 0 ]]; then
+            gh api --method POST "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --input "${payload_file}" >/dev/null
+          else
+            gh api --method PATCH "repos/${REPOSITORY}/issues/comments/${comment_ids[0]}" \
+              --input "${payload_file}" >/dev/null
+            for comment_id in "${comment_ids[@]:1}"; do
+              gh api --method DELETE "repos/${REPOSITORY}/issues/comments/${comment_id}"
+            done
+          fi

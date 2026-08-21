@@ -1,0 +1,152 @@
+name: SkillSpector static scan
+description: Scan agent skills without an LLM and report high-confidence, high-severity findings.
+
+inputs:
+  head-path:
+    description: Set the path to the repository tree that the action must scan. The path is relative to GITHUB_WORKSPACE.
+    required: false
+    default: "."
+  base-path:
+    description: Set an optional base-tree path relative to GITHUB_WORKSPACE. The action compares findings and partially inspected images with this tree.
+    required: false
+    default: ""
+  head-sha:
+    description: Set the commit SHA that the action uses for report links.
+    required: false
+    default: ""
+  repository:
+    description: Set the repository in owner/name format. The action uses it in report links.
+    required: false
+    default: ""
+  min-confidence:
+    description: Set the minimum confidence from 0.0 through 1.0 for HIGH and CRITICAL findings.
+    required: false
+    default: "0.8"
+  fail-on-findings:
+    description: Fail the action when the policy selects one or more findings.
+    required: false
+    default: "true"
+  annotation-level:
+    description: Set the annotation level to error or warning. Set it to auto to match fail-on-findings.
+    required: false
+    default: "auto"
+
+outputs:
+  scan-complete:
+    description: This value is true when all SkillSpector scans completed.
+    value: ${{ steps.scan.outputs.scan-complete }}
+  finding-count:
+    description: This value is the number of findings that the action policy selected.
+    value: ${{ steps.scan.outputs.finding-count }}
+  skill-count:
+    description: This value is the number of skills in the head tree.
+    value: ${{ steps.scan.outputs.skill-count }}
+  report-path:
+    description: This value is the path to the sanitized JSON report.
+    value: ${{ steps.scan.outputs.report-path }}
+  comment-path:
+    description: This value is the path to the sanitized Markdown comment.
+    value: ${{ steps.scan.outputs.comment-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Verify the runtime checkout path
+      shell: bash
+      run: |
+        if [[ -e "${GITHUB_WORKSPACE}/.skillspector-upstream" ]]; then
+          echo "::error::The .skillspector-upstream runtime path already exists."
+          exit 1
+        fi
+
+    - name: Check out SkillSpector
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: NVIDIA/SkillSpector
+        ref: 29b0dc8c39424e8e31ca055fa027adf8ba8f9650 # v2.9.6
+        path: .skillspector-upstream
+        persist-credentials: false
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+      with:
+        enable-cache: true
+        python-version: "3.12"
+        version: "0.11.26"
+        cache-dependency-glob: .skillspector-upstream/uv.lock
+
+    - name: Install SkillSpector and scan skills
+      id: scan
+      shell: bash
+      env:
+        BASE_PATH: ${{ inputs.base-path }}
+        HEAD_PATH: ${{ inputs.head-path }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        MIN_CONFIDENCE: ${{ inputs.min-confidence }}
+        REPOSITORY: ${{ inputs.repository }}
+        ANNOTATION_LEVEL: ${{ inputs.annotation-level }}
+        FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
+        LANGCHAIN_TRACING_V2: "false"
+        LANGSMITH_TRACING: "false"
+      run: |
+        set -euo pipefail
+
+        runtime_parent=$(mktemp -d "${RUNNER_TEMP}/skillspector-runtime.XXXXXX")
+        runtime_path="${runtime_parent}/source"
+        mv "${GITHUB_WORKSPACE}/.skillspector-upstream" "${runtime_path}"
+        restore_runtime() {
+          if [[ -d "${runtime_path}" && ! -e "${GITHUB_WORKSPACE}/.skillspector-upstream" ]]; then
+            mv "${runtime_path}" "${GITHUB_WORKSPACE}/.skillspector-upstream"
+          fi
+        }
+        trap restore_runtime EXIT
+        uv sync \
+          --project "${runtime_path}" \
+          --locked \
+          --no-dev \
+          --python 3.12
+
+        arguments=(
+          --head-root "${HEAD_PATH}"
+          --scanner "${runtime_path}/.venv/bin/skillspector"
+          --expected-version "2.9.6"
+          --min-confidence "${MIN_CONFIDENCE}"
+          --head-sha "${HEAD_SHA}"
+          --repository "${REPOSITORY}"
+          --github-output "${GITHUB_OUTPUT}"
+          --step-summary "${GITHUB_STEP_SUMMARY}"
+        )
+        if [[ "${FAIL_ON_FINDINGS}" != "true" && "${FAIL_ON_FINDINGS}" != "false" ]]; then
+          echo "::error::The fail-on-findings input must be true or false."
+          exit 2
+        fi
+        annotation_level="${ANNOTATION_LEVEL}"
+        if [[ "${annotation_level}" == "auto" ]]; then
+          if [[ "${FAIL_ON_FINDINGS}" == "true" ]]; then
+            annotation_level="error"
+          else
+            annotation_level="warning"
+          fi
+        fi
+        arguments+=(--annotation-level "${annotation_level}")
+        if [[ -n "${BASE_PATH}" ]]; then
+          arguments+=(--base-root "${BASE_PATH}")
+        fi
+
+        "${runtime_path}/.venv/bin/python" \
+          "${GITHUB_ACTION_PATH}/scan.py" "${arguments[@]}"
+
+    - name: Apply the finding policy
+      if: inputs.fail-on-findings == 'true' && steps.scan.outputs.finding-count != '0'
+      shell: bash
+      env:
+        FINDING_COUNT: ${{ steps.scan.outputs.finding-count }}
+      run: |
+        finding_word="findings"
+        review_verb="require"
+        if [[ "${FINDING_COUNT}" == "1" ]]; then
+          finding_word="finding"
+          review_verb="requires"
+        fi
+        echo "::error::The SkillSpector policy found ${FINDING_COUNT} ${finding_word} that ${review_verb} review."
+        exit 1
