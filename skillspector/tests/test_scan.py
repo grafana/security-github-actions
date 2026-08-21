@@ -557,7 +557,7 @@ class OutputSafetyTests(unittest.TestCase):
         self.assertNotIn("raw secret text", str(payload))
         self.assertTrue(str(payload["fingerprint"]).startswith("sha256:"))
 
-    def test_markdown_reports_partial_inspection(self) -> None:
+    def test_partial_scan_note(self) -> None:
         markdown = scan.render_markdown(
             [],
             skill_count=1,
