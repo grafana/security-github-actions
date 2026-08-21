@@ -23,7 +23,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: grafana/security-github-actions/.github/workflows/reusable-skillspector.yml@main
+    uses: grafana/security-github-actions/.github/workflows/reusable-skillspector.yml@57baae77bd63874eb7c6b6deec4961c595136332
 ```
 
 The examples pin the workflow to a full commit SHA. Update this SHA only after you review a newer workflow version.
@@ -94,7 +94,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: grafana/security-github-actions/.github/workflows/reusable-skillspector.yml@main
+    uses: grafana/security-github-actions/.github/workflows/reusable-skillspector.yml@57baae77bd63874eb7c6b6deec4961c595136332
     with:
       min-confidence: 0.9
 ```
