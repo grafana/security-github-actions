@@ -49,7 +49,7 @@ A file change can make a previous finding report again. SkillSpector binds basel
 
 Other events have no base-tree comparison. For these events, the workflow reports all head findings that meet the policy.
 
-Set `fail-on-findings` to `false` for advisory mode. This mode creates reports and comments, but policy findings do not fail the job. Scanner errors always fail the job.
+Set `fail-on-findings` to `false` for advisory mode. This mode creates reports and, when enabled, pull request comments. Policy findings do not fail the job. Scanner errors always fail the job.
 
 ## Pull request comments and reports
 
@@ -85,7 +85,7 @@ The workflow finds regular `SKILL.md` files in hidden and nested directories. It
 
 It runs the SkillSpector CLI once for each directory that contains a manifest. It removes duplicate findings from overlapping nested scans.
 
-The checkout resolves Git LFS files before the scan. The workflow rejects all symbolic links and Git submodules in the repository.
+The checkout resolves Git LFS files before the scan. The workflow rejects all symbolic links and Git submodules in the head tree.
 
 The workflow fails if SkillSpector cannot fully inspect a skill. It rejects partial inspections, inspection exceptions, and excluded skill content.
 
