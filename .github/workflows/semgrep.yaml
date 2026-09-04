@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       # A Docker image with Semgrep installed. Do not change this.
-      image: semgrep/semgrep:1.171.0@sha256:bdf7013b2c3634a487671158da77c554f531742326b543a9464d2adf6c433ac8
+      image: semgrep/semgrep:1.176.0@sha256:12672acdb0949e19f9f6a4c2b288edd0b404f268f0ca7738a2c06f372f50362e
     steps:
       # Fetch project source with GitHub Actions Checkout.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
