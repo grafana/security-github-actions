@@ -55,7 +55,7 @@ jobs:
           ref: ${{ matrix.repository.ref }}
 
       - name: Setup UV
-        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
           activate-environment: true
