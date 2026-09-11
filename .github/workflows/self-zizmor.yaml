@@ -45,7 +45,7 @@ jobs:
       - zizmor-check
     if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@f206fa553f788616be56dadc0c38e921cc847d91
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@363f83ea5c68eb24f36375a502318721b19599ed
     with:
       runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }} # grafana private repos use self-hosted runners (any arch, medium or smaller); other orgs use ubuntu-latest
       fail-severity: high
