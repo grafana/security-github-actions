@@ -1,0 +1,61 @@
+name: Test the SkillSpector workflow
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/reusable-skillspector.yml
+      - .github/workflows/self-skillspector.yaml
+      - skillspector/**
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/reusable-skillspector.yml
+      - .github/workflows/self-skillspector.yaml
+      - skillspector/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-skillspector-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reusable-workflow:
+    name: Run the reusable workflow
+    permissions:
+      contents: read
+      pull-requests: write # The called workflow can update one pull request comment.
+    uses: ./.github/workflows/reusable-skillspector.yml
+    with:
+      comment-on-pr: false
+
+  verify-reusable-workflow:
+    name: Verify the reusable workflow
+    needs: reusable-workflow
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download the scan report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: skillspector-static-report
+          path: .skillspector-report
+
+      - name: Verify the workflow outputs
+        env:
+          FINDING_COUNT: ${{ needs.reusable-workflow.outputs.finding-count }}
+          SKILL_COUNT: ${{ needs.reusable-workflow.outputs.skill-count }}
+        run: |
+          set -euo pipefail
+
+          [[ "${FINDING_COUNT}" == "0" ]]
+          [[ "${SKILL_COUNT}" =~ ^[1-9][0-9]*$ ]]
+          jq -e \
+            --argjson finding_count "${FINDING_COUNT}" '
+              .scanner_version == "2.9.6" and
+              .no_llm == true and
+              .finding_count == $finding_count and
+              (.findings | type == "array")
+            ' .skillspector-report/skillspector-results.json >/dev/null
