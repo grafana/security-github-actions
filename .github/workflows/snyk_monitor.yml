@@ -15,7 +15,7 @@ jobs:
           persist-credentials: false
       - name: Run Snyk to import ${{ github.event.repository.name }} to Snyk
         continue-on-error: true
-        uses: snyk/actions/golang@e2221410bff24446ba09102212d8bc75a567237d # master
+        uses: snyk/actions/golang@b075801f26076be9bb50521154cafab73f44da0c # master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
