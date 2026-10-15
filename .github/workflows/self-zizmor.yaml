@@ -15,13 +15,29 @@ jobs:
     name: Check whether there are things to scan
     permissions:
       contents: read
+      pull-requests: read
     runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }} # grafana private repos use self-hosted runners (any arch, medium or smaller); other orgs use ubuntu-latest
     outputs:
-      found-files: ${{ steps.zizmor-check.outputs.found-files }}
+      # GitHub's PR files API returns at most 3,000 files.
+      found-files: >-
+        ${{ (github.event_name == 'pull_request' && github.event.pull_request.changed_files >= 3000) && 'true' ||
+            steps.pr-changes.outputs.zizmor || steps.zizmor-check.outputs.found-files }}
     steps:
+      - name: Check pull request changes
+        if: github.event_name == 'pull_request' && github.event.pull_request.changed_files < 3000
+        id: pr-changes
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        with:
+          filters: |
+            zizmor:
+              - '**/.github/workflows/**/*.{yml,yaml}'
+              - '**/action.{yml,yaml}'
+              - '**/{zizmor,.zizmor}.{yml,yaml}'
       - name: Checkout
+        if: github.event_name != 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Run zizmor
+      - name: Check for workflow and action definitions
+        if: github.event_name != 'pull_request'
         id: zizmor-check
         shell: bash
         run: |
