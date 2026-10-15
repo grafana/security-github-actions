@@ -1,0 +1,23 @@
+name: Test zizmor change detection
+on:
+  pull_request:
+    paths:
+      - .github/workflows/self-zizmor.yaml
+      - .github/workflows/test-zizmor-changes.yaml
+      - tests/zizmor-changes.test.cjs
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/self-zizmor.yaml
+      - .github/workflows/test-zizmor-changes.yaml
+      - tests/zizmor-changes.test.cjs
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: node --test tests/zizmor-changes.test.cjs

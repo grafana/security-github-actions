@@ -15,13 +15,35 @@ jobs:
     name: Check whether there are things to scan
     permissions:
       contents: read
+      pull-requests: read
     runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }} # grafana private repos use self-hosted runners (any arch, medium or smaller); other orgs use ubuntu-latest
     outputs:
-      found-files: ${{ steps.zizmor-check.outputs.found-files }}
+      found-files: ${{ steps.pr-changes.outputs.found-files || steps.zizmor-check.outputs.found-files }}
     steps:
+      - name: Check pull request changes
+        if: github.event_name == 'pull_request'
+        id: pr-changes
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+            // The API caps results at 3,000 files; incomplete diffs must still be scanned.
+            const incomplete = files.length < context.payload.pull_request.changed_files;
+            const relevant = /(^|\/)\.github\/workflows\/.*\.ya?ml$|(^|\/)action\.ya?ml$|(^|\/)\.?zizmor\.ya?ml$/;
+            const changed = files.some(file =>
+              relevant.test(file.filename) ||
+              (file.previous_filename && relevant.test(file.previous_filename))
+            );
+            core.setOutput('found-files', incomplete || changed);
       - name: Checkout
+        if: github.event_name != 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Run zizmor
+      - name: Check for workflow and action definitions
+        if: github.event_name != 'pull_request'
         id: zizmor-check
         shell: bash
         run: |
