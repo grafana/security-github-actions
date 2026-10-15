@@ -19,7 +19,7 @@ on:
         default: "ubuntu-latest"
         type: string
       send-bench-metrics:
-        description: "If true, run Grafana Bench after scan (requires Vault Prometheus creds). Job only runs for grafana org and non-fork PRs; fork PRs have no OIDC/Vault access."
+        description: "If true, run Grafana Bench after scan (requires Vault Prometheus creds). Reporting only runs for grafana org and non-fork PRs; fork PRs have no OIDC/Vault access."
         required: false
         default: true
         type: boolean
@@ -32,6 +32,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write
 
 env:
   # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
@@ -473,32 +474,25 @@ jobs:
             exit 1
           fi
 
-  grafana-bench:
-    name: Send TruffleHog metrics to Prometheus via Grafana Bench
-    continue-on-error: true
-    needs: [trufflehog-scan]
-    # Only run for grafana org and non-fork PRs (fork PRs have no OIDC/Vault access).
-    if: ${{ github.repository_owner == 'grafana' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && inputs.send-bench-metrics && always() && !cancelled() && (needs.trufflehog-scan.result == 'success' || needs.trufflehog-scan.result == 'failure') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
       - name: Get Prometheus secrets from Vault
+        id: get-secrets
+        if: ${{ !cancelled() && github.repository_owner == 'grafana' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && inputs.send-bench-metrics && hashFiles('results-sanitized.json') != '' }}
+        continue-on-error: true
         uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
         with:
+          export_env: false
           common_secrets: |
             PROMETHEUS_URL=grafana-bench:prometheus_url
             PROMETHEUS_USER=grafana-bench:prometheus_user
             PROMETHEUS_PASSWORD=grafana-bench:prometheus_token
 
-      - name: Download TruffleHog scan artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: trufflehog_scan
-
       - name: Send TruffleHog metrics to Prometheus via Grafana Bench
+        if: ${{ !cancelled() && steps.get-secrets.outcome == 'success' }}
+        continue-on-error: true
         env:
+          PROMETHEUS_URL: ${{ fromJSON(steps.get-secrets.outputs.secrets).PROMETHEUS_URL }}
+          PROMETHEUS_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).PROMETHEUS_USER }}
+          PROMETHEUS_PASSWORD: ${{ fromJSON(steps.get-secrets.outputs.secrets).PROMETHEUS_PASSWORD }}
           BENCH_SERVICE: ${{ format('grafana-{0}', github.event.repository.name) }}
           BENCH_SUITE_NAME: ${{ github.event.repository.name }}/trufflehog
           BENCH_SERVICE_VERSION: ${{ github.sha }}
@@ -512,9 +506,9 @@ jobs:
             exit 0
           fi
 
-          EXCLUDE_FLAG=""
+          EXCLUDE_ARGS=()
           if [[ -f "trufflehog-exclude.txt" ]]; then
-            EXCLUDE_FLAG="--trufflehog-exclude-file /tests/trufflehog-exclude.txt"
+            EXCLUDE_ARGS=(--trufflehog-exclude-file /tests/trufflehog-exclude.txt)
           fi
 
           docker run --rm \
@@ -532,5 +526,5 @@ jobs:
             --report-output log \
             --log-level debug \
             --prometheus-metrics \
-            ${EXCLUDE_FLAG} \
+            "${EXCLUDE_ARGS[@]}" \
             /tests/results-sanitized.json
