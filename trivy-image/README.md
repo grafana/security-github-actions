@@ -6,10 +6,11 @@ on the pull request. It never fails the job because of findings.
 
 What the comment shows:
 
-- Counts by severity and how many findings have a fix.
-- Vulnerabilities **introduced** and **resolved** compared to a baseline, when one is
-  available (see [Baseline](#baseline)).
-- The full list of findings at the requested severities, collapsed.
+- Counts by severity.
+- A red/green/blue callout with the vulnerabilities **introduced** and **resolved**
+  compared to a baseline, when one is available (see [Baseline](#baseline)).
+- The full list of findings at the requested severities, collapsed, with a link to the
+  workflow run.
 
 The same Markdown is written to the job summary, so fork PRs (which cannot post
 comments) still get the results.

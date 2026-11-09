@@ -9,6 +9,7 @@
 #   BASELINE_IMAGE_REF  Baseline image reference when BASELINE_SOURCE=image
 #   IMAGE_REF, IMAGE_NAME, SLUG, SEVERITY, IGNORE_UNFIXED, SBOM_CACHE_HIT,
 #   BASELINE_REF, TRIVY_BIN_VERSION, MAX_ROWS
+#   GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID (runner defaults) for the run link
 set -euo pipefail
 
 : "${REPORT_PATH:?REPORT_PATH is required}"
@@ -38,6 +39,11 @@ else
     echo "::warning::Baseline report is unreadable; showing results without a diff." >&2
   fi
   baseline_arg=(--argjson base '[]')
+fi
+
+run_url=""
+if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" && -n "${GITHUB_RUN_ID:-}" ]]; then
+  run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 fi
 
 summary_path="$(dirname "${REPORT_PATH}")/summary.json"
@@ -107,6 +113,7 @@ jq -r \
   --arg baseline_source "${BASELINE_SOURCE}" \
   --arg baseline_image_ref "${BASELINE_IMAGE_REF}" \
   --arg trivy_version "${TRIVY_BIN_VERSION}" \
+  --arg run_url "${run_url}" \
   --argjson max_rows "${MAX_ROWS}" \
   '
   # Report fields come from the image and the vulnerability DB, so treat them as untrusted:
@@ -119,59 +126,70 @@ jq -r \
   def safe_url:
     if test("^https://[A-Za-z0-9._~:/?#@!$&'"'"'*+,;=%()-]+$") then gsub("\\("; "%28") | gsub("\\)"; "%29") else "" end;
   def link: (.url | safe_url) as $u | if $u == "" then (.id | esc) else "[\(.id | esc)](\($u))" end;
-  def row: "| \(.severity | esc) | \(link) | \(.pkg | code) | \(.installed | code) | \(.fixed | code) | \(.type | esc) |";
+  def icon: {CRITICAL: "🔴", HIGH: "🟠", MEDIUM: "🟡", LOW: "🟢"}[.] // "⚪";
+  def row: "| \(.severity | icon) \(.severity | esc) | \(link) | \(.pkg | code) | \(.installed | code) | \(.fixed | code) | \(.type | esc) |";
   def table:
     if length == 0 then "_none_"
     else
       ( "| Severity | Vulnerability | Package | Installed | Fixed | Type |",
         "|---|---|---|---|---|---|",
         (.[:$max_rows][] | row),
-        (if length > $max_rows then "", "_… and \(length - $max_rows) more (see job summary or re-run with a higher `max-rows`)._" else empty end)
+        (if length > $max_rows then "", "_… and \(length - $max_rows) more; see the [workflow run](\($run_url)) summary or raise `max-rows`._" else empty end)
       )
     end;
-  def vuln_count: if . == 1 then "1 vulnerability" else "\(.) vulnerabilities" end;
-  def baseline_heading:
-    if $baseline_source == "image" then "#### Changes compared to image `\($baseline_image_ref)`"
-    elif $baseline_source == "artifact" then "#### Changes compared to `\($baseline_ref)` (baseline artifact)"
-    else "#### Changes compared to `\($baseline_ref)` (cached baseline)"
+  def details($summary; $open):
+    ("<details" + (if $open then " open" else "" end) + "><summary>\($summary)</summary>", "", table, "", "</details>");
+  def vulns($n): if $n == 1 then "1 vulnerability" else "\($n) vulnerabilities" end;
+  def requested($s): ($severity | ascii_upcase | split(",") | map(gsub(" "; "")) | index($s)) != null;
+  def count_line:
+    . as $s
+    | [ (select(requested("CRITICAL") or $s.critical > 0) | "🔴 **\($s.critical)** critical"),
+        (select(requested("HIGH") or $s.high > 0)         | "🟠 **\($s.high)** high"),
+        (select(requested("MEDIUM") or $s.medium > 0)     | "🟡 **\($s.medium)** medium"),
+        (select(requested("LOW") or $s.low > 0)           | "🟢 **\($s.low)** low") ]
+    | join(" · ")
+    + (if $ignore_unfixed == "true" then " (fixed only)" else "" end);
+  def baseline_label:
+    if $baseline_source == "image" then "image \($baseline_image_ref | code)"
+    else ($baseline_ref | code) + (if $baseline_source == "artifact" then " (baseline artifact)" else "" end)
     end;
+  # Shorten a trailing hex tag/digest so the image ref does not dominate the footer.
+  def short_ref: (capture("^(?<p>.*[:@])(?<h>[0-9a-f]{12,})$") | "\(.p)\(.h[:8])…") // .;
 
-  "### Trivy image scan: `\($image_name)`",
+  "### Trivy image scan: \($image_name | code)",
   "",
-  "**Image:** `\($image_ref)`"
-    + (if .os != "" then " · **OS:** \(.os | esc)" else "" end)
-    + (if $trivy_version != "" then " · **Trivy:** \($trivy_version)" else "" end)
-    + " · **SBOM:** " + (if $cache_hit == "true" then "restored from cache (image layers unchanged)" else "generated" end),
-  "",
-  "**Findings at \($severity)"
-    + (if $ignore_unfixed == "true" then ", fixed only" else "" end)
-    + ":** \(.critical) critical · \(.high) high"
-    + (if .medium > 0 then " · \(.medium) medium" else "" end)
-    + (if .low > 0 then " · \(.low) low" else "" end)
-    + " · \(.fixable) with a fix available",
+  count_line,
   "",
   (if .baseline_found then
-      baseline_heading,
-      "",
-      (if (.introduced | length) == 0 and (.resolved | length) == 0 then
-        "No vulnerabilities introduced or resolved by this change."
-       else
-        ("**Introduced (\(.introduced | length))**", "", (.introduced | table), "",
-         "**Resolved (\(.resolved | length))**", "", (.resolved | table))
-       end)
+      (.introduced | length) as $n | (.resolved | length) as $r
+      | (if $n > 0 then
+          "> [!CAUTION]",
+          "> **\(vulns($n)) introduced** compared to \(baseline_label)" + (if $r > 0 then ", \($r) resolved" else "" end) + "."
+        elif $r > 0 then
+          "> [!TIP]",
+          "> **\(vulns($r)) resolved** compared to \(baseline_label); none introduced."
+        else
+          "> [!TIP]",
+          "> No vulnerabilities introduced or resolved compared to \(baseline_label)."
+        end),
+        "",
+        (if $n > 0 then (.introduced | details("Introduced (\($n))"; true)), "" else empty end),
+        (if $r > 0 then (.resolved | details("Resolved (\($r))"; false)), "" else empty end)
    elif $baseline_ref != "" or $baseline_image_ref != "" then
-      "_No baseline available"
-        + (if $baseline_ref != "" then " for `\($baseline_ref)`" else "" end)
-        + ", so introduced/resolved vulnerabilities cannot be shown. A baseline is saved when this action runs on a push to the base branch (cache + 90-day artifact), or pass `baseline-image-ref` to diff against a specific image._"
+      "> [!NOTE]",
+      "> No baseline" + (if $baseline_ref != "" then " for \($baseline_ref | code)" else "" end)
+        + " yet, so introduced/resolved changes cannot be shown. One is saved on the next push to the base branch, or set `baseline-image-ref`.",
+      ""
    else empty
    end),
+  (.total as $t | .findings | details("All findings (\($t))"; false)),
   "",
-  "<details><summary>All findings (\(.total | vuln_count))</summary>",
-  "",
-  (.findings | table),
-  "",
-  "</details>",
-  "",
-  "_Informational only; this check never fails the build._",
+  "<sub>"
+    + ($image_ref | short_ref | code)
+    + (if .os != "" then " · \(.os | esc)" else "" end)
+    + (if $trivy_version != "" then " · Trivy \($trivy_version)" else "" end)
+    + " · SBOM " + (if $cache_hit == "true" then "from cache" else "generated" end)
+    + (if $run_url != "" then " · [workflow run](\($run_url))" else "" end)
+    + " · informational only, never fails the build</sub>",
   "<!-- trivy-image-scan:\($slug) -->"
   ' "${summary_path}"
