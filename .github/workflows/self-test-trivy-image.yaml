@@ -1,0 +1,63 @@
+name: Self-test trivy-image
+
+on:
+  pull_request:
+    paths:
+      - "trivy-image/**"
+      - ".github/workflows/self-test-trivy-image.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - "trivy-image/**"
+      - ".github/workflows/self-test-trivy-image.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+    env:
+      IMAGE: trivy-image-selftest:${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build fixture image
+        run: docker build -t "${IMAGE}" trivy-image/testdata
+
+      - name: Scan fixture image
+        id: scan
+        uses: ./trivy-image
+        with:
+          image-ref: ${{ env.IMAGE }}
+          image-name: trivy-image-selftest
+
+      - name: Check outputs
+        env:
+          TOTAL: ${{ steps.scan.outputs.total }}
+          FIXABLE: ${{ steps.scan.outputs.fixable }}
+          REPORT: ${{ steps.scan.outputs.report-path }}
+          SBOM: ${{ steps.scan.outputs.sbom-path }}
+          SBOM_CACHE_HIT: ${{ steps.scan.outputs.sbom-cache-hit }}
+          BASELINE_FOUND: ${{ steps.scan.outputs.baseline-found }}
+          BASELINE_SOURCE: ${{ steps.scan.outputs.baseline-source }}
+        run: |
+          set -euo pipefail
+          echo "total=${TOTAL} fixable=${FIXABLE} sbom-cache-hit=${SBOM_CACHE_HIT} baseline-found=${BASELINE_FOUND} baseline-source=${BASELINE_SOURCE}"
+          [[ "${TOTAL}" =~ ^[0-9]+$ ]] || { echo "::error::total is not numeric"; exit 1; }
+          [[ "${BASELINE_SOURCE}" =~ ^(image|cache|artifact|none)$ ]] || { echo "::error::unexpected baseline-source"; exit 1; }
+          jq -e '.Results' "${REPORT}" > /dev/null
+          jq -e '.bomFormat == "CycloneDX"' "${SBOM}" > /dev/null
