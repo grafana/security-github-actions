@@ -11,7 +11,7 @@ description: >-
 inputs:
   image-ref:
     description: >-
-      Image reference present in the local Docker daemon, e.g. `my-app:pr-${{ github.sha }}`.
+      Image reference present in the local Docker daemon, e.g. `my-app:pr-<sha>`.
       With docker/build-push-action set `load: true` so the image is loaded.
     required: true
   image-name:
