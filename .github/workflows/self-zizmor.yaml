@@ -1,4 +1,4 @@
-name: zizmor GitHub Actions static analysis
+name: POC - zizmor secret discovery
 on:
   push:
   pull_request:
@@ -12,7 +12,7 @@ on:
     types: [checks_requested]
 jobs:
   zizmor-check:
-    name: Check whether there are things to scan
+    name: POC - Check whether there are things to scan
     permissions:
       contents: read
     runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }} # grafana private repos use self-hosted runners (any arch, medium or smaller); other orgs use ubuntu-latest
@@ -32,7 +32,7 @@ jobs:
           fi
           echo "found-files=${FOUND_FILES}" >> "$GITHUB_OUTPUT"
   zizmor:
-    name: Run zizmor
+    name: POC - Run zizmor
 
     permissions:
       actions: read
@@ -45,15 +45,14 @@ jobs:
       - zizmor-check
     if: ${{ needs.zizmor-check.outputs.found-files == 'true' }}
 
-    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@030bdd10e567ae3cc62533c5b356dd151e96e323 # main
+    uses: grafana/shared-workflows/.github/workflows/reusable-zizmor.yml@dblinkhorn/secrets-notification-poc
     with:
       runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }} # grafana private repos use self-hosted runners (any arch, medium or smaller); other orgs use ubuntu-latest
       fail-severity: high
       min-severity: high
       min-confidence: low
       extra-args: --offline
-      # Reusable workflow gates bench job on org + non-fork PR (OIDC/Vault not available on fork PRs); pass true to opt in.
-      send-bench-metrics: true
-      auto-delete-dangerous-branches: true
+      send-bench-metrics: false
+      auto-delete-dangerous-branches: false
       auto-delete-slack-channel-id: C0B7DLH818A
     secrets: inherit
