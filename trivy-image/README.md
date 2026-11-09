@@ -13,7 +13,9 @@ What the comment shows:
   workflow run.
 
 The same Markdown is written to the job summary, so fork PRs (which cannot post
-comments) still get the results.
+comments) still get the results. Scan metadata that is not in the comment (detected OS,
+whether the SBOM came from cache, which baseline source was used) is printed in the
+`Build report` step log.
 
 For why Trivy rather than Grype or OSV-Scanner, see [scanner-evaluation.md](scanner-evaluation.md).
 

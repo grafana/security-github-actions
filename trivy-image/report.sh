@@ -108,7 +108,6 @@ jq -r \
   --arg slug "${SLUG}" \
   --arg severity "${SEVERITY}" \
   --arg ignore_unfixed "${IGNORE_UNFIXED}" \
-  --arg cache_hit "${SBOM_CACHE_HIT}" \
   --arg baseline_ref "${BASELINE_REF}" \
   --arg baseline_source "${BASELINE_SOURCE}" \
   --arg baseline_image_ref "${BASELINE_IMAGE_REF}" \
@@ -143,10 +142,10 @@ jq -r \
   def requested($s): ($severity | ascii_upcase | split(",") | map(gsub(" "; "")) | index($s)) != null;
   def count_line:
     . as $s
-    | [ (select(requested("CRITICAL") or $s.critical > 0) | "🔴 **\($s.critical)** critical"),
-        (select(requested("HIGH") or $s.high > 0)         | "🟠 **\($s.high)** high"),
-        (select(requested("MEDIUM") or $s.medium > 0)     | "🟡 **\($s.medium)** medium"),
-        (select(requested("LOW") or $s.low > 0)           | "🟢 **\($s.low)** low") ]
+    | [ (select(requested("CRITICAL") or $s.critical > 0) | "🔴 **\($s.critical)** Critical"),
+        (select(requested("HIGH") or $s.high > 0)         | "🟠 **\($s.high)** High"),
+        (select(requested("MEDIUM") or $s.medium > 0)     | "🟡 **\($s.medium)** Medium"),
+        (select(requested("LOW") or $s.low > 0)           | "🟢 **\($s.low)** Low") ]
     | join(" · ")
     + (if $ignore_unfixed == "true" then " (fixed only)" else "" end);
   def baseline_label:
@@ -177,8 +176,11 @@ jq -r \
         (if $r > 0 then (.resolved | details("Resolved (\($r))"; false)), "" else empty end)
    elif $baseline_ref != "" or $baseline_image_ref != "" then
       "> [!NOTE]",
-      "> No baseline" + (if $baseline_ref != "" then " for \($baseline_ref | code)" else "" end)
-        + " yet, so introduced/resolved changes cannot be shown. One is saved on the next push to the base branch, or set `baseline-image-ref`.",
+      (if $baseline_ref != "" then
+        "> No baseline for \($baseline_ref | code) yet; one is saved on the next push to \($baseline_ref | code)."
+       else
+        "> No baseline available yet."
+       end),
       ""
    else empty
    end),
@@ -186,10 +188,18 @@ jq -r \
   "",
   "<sub>"
     + ($image_ref | short_ref | code)
-    + (if .os != "" then " · \(.os | esc)" else "" end)
     + (if $trivy_version != "" then " · Trivy \($trivy_version)" else "" end)
-    + " · SBOM " + (if $cache_hit == "true" then "from cache" else "generated" end)
     + (if $run_url != "" then " · [workflow run](\($run_url))" else "" end)
-    + " · informational only, never fails the build</sub>",
+    + "</sub>",
+  "<sub>Informational only; this check never fails the build.</sub>",
   "<!-- trivy-image-scan:\($slug) -->"
   ' "${summary_path}"
+
+# Scan metadata that is not shown in the comment goes to the step log.
+jq -r \
+  --arg image_ref "${IMAGE_REF}" \
+  --arg trivy_version "${TRIVY_BIN_VERSION}" \
+  --arg sbom "$(if [[ "${SBOM_CACHE_HIT}" == "true" ]]; then echo cache; else echo generated; fi)" \
+  --arg baseline_source "${BASELINE_SOURCE}" \
+  '"image=\($image_ref) os=\(.os | if . == "" then "unknown" else . end) trivy=\($trivy_version) sbom=\($sbom) baseline=\($baseline_source) total=\(.total)"' \
+  "${summary_path}" >&2
