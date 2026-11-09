@@ -17,15 +17,14 @@ The action scans an image built in a PR job and posts an informational comment. 
 
 ## Image shapes in the fleet
 
-From the `FROM` lines across `security-vulnerability-obs`, `oss-vuln-mgmt` and
-`vulnerability-management`:
+From the `FROM` lines of the 18 images in the repositories that will adopt this action first:
 
-| Shape | Count | Examples |
-|---|---|---|
-| Go binary on `scratch` (+ CA certs) | 7 | kubernetes-image-dispatcher, github-connector, vuln-events |
-| Go binary on `gcr.io/distroless/static` | 7 | api-server, records, version-archiver |
-| Go binary + vendored scanner on `alpine:3.24` | 3 | trivy-scanner, grype-scanner, osv-scanner |
-| Node app on `gcr.io/distroless/nodejs24` | 1 | vulnibot |
+| Shape | Count |
+|---|---|
+| Go binary on `scratch` (+ CA certs) | 7 |
+| Go binary on a distroless static base | 7 |
+| Go binary plus a vendored CLI tool on Alpine | 3 |
+| Node app on a distroless Node base | 1 |
 
 Go-on-minimal-base is 78% of the fleet, so Go binary analysis is the coverage that matters most.
 
@@ -114,9 +113,9 @@ Trivy, for these reasons in order:
 
 1. **Coverage on our dominant shape.** Trivy and OSV-Scanner found the full Go module
    vulnerability set on the distroless image; Grype found roughly half.
-2. **Consistency with the platform.** `trivy-scanner` is the primary scanner in
-   `oss-vuln-mgmt` and the backend has a Trivy converter, so a PR comment and the
-   dashboard entry for the pushed image show the same IDs and severities.
+2. **Consistency with the platform.** The internal vulnerability platform scans pushed
+   images with Trivy, so a PR comment and the dashboard entry for the same image show
+   the same IDs and severities.
 3. **Consistency with this repo.** The existing `trivy/` action, `.trivyignore` conventions
    and Trivy report format are already familiar.
 4. **SBOM round-trip verified.** `trivy image --format cyclonedx` followed by `trivy sbom`

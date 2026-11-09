@@ -80,15 +80,14 @@ of loading locally, pull or load the image first, then point `image-ref` at it:
 ```
 
 Alternatively, if the merge workflow always pushes a `latest` (or `main`) tag, skip the
-push-side run entirely and diff against the registry image directly. For an
-`oss-vuln-mgmt` service that would be:
+push-side run entirely and diff against the registry image directly:
 
 ```yaml
 - uses: grafana/security-github-actions/trivy-image@<sha>
   with:
-    image-ref: trivy-scanner:pr-${{ github.sha }}
-    image-name: trivy-scanner
-    baseline-image-ref: us-docker.pkg.dev/<project>/<repo>/trivy-scanner:latest
+    image-ref: my-app:pr-${{ github.sha }}
+    image-name: my-app
+    baseline-image-ref: us-docker.pkg.dev/<project>/<repo>/my-app:latest
 ```
 
 Until a baseline exists, PR comments say so and show the full list only. The comment
