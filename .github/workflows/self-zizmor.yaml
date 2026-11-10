@@ -15,6 +15,8 @@ jobs:
     name: Check whether there are things to scan
     permissions:
       contents: read
+      # Remove after the secret migration grace period ends on December 7, 2026.
+      pull-requests: write
     runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }} # grafana private repos use self-hosted runners (any arch, medium or smaller); other orgs use ubuntu-latest
     outputs:
       found-files: ${{ steps.zizmor-check.outputs.found-files }}
@@ -31,6 +33,59 @@ jobs:
               FOUND_FILES=true
           fi
           echo "found-files=${FOUND_FILES}" >> "$GITHUB_OUTPUT"
+
+      - name: Find GitHub secret references
+        id: secret-references
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        shell: bash
+        run: |
+          shopt -s nullglob
+          reference="secrets[[:space:]]*(\.[[:space:]]*[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*['\"][A-Za-z_][A-Za-z0-9_]*['\"][[:space:]]*\])"
+          secret_references=''
+          for file in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [[ -f $file && ! -L $file ]] || continue
+            matches=$(grep -Eio "$reference" "$file" || [[ $? -eq 1 ]])
+            names=$(printf '%s\n' "$matches" | tr '[:lower:]' '[:upper:]' | sed 's/^SECRETS//; s/[^A-Z0-9_]//g; /^GITHUB_TOKEN$/d; /^$/d' | LC_ALL=C sort -u)
+            formatted=''
+            while IFS= read -r name; do
+              [[ -n $name ]] || continue
+              formatted+="${formatted:+, }\`$name\`"
+            done <<< "$names"
+            [[ -z $formatted ]] || secret_references+="- \`$file\`: $formatted"$'\n'
+          done
+          printf 'secret_references<<EOF\n%s\nEOF\n' "$secret_references" >> "$GITHUB_OUTPUT"
+
+      - name: Comment with secret migration notice
+        if: steps.secret-references.outcome == 'success' && steps.secret-references.outputs.secret_references != ''
+        continue-on-error: true
+        uses: int128/comment-action@2263c1a82c13c37672f725bcd07145530cd42579 # v1.69.0
+        with:
+          update-if-exists: replace
+          update-if-exists-key: github-actions-secret-removal-notice
+          post: |
+            ### GitHub Actions secret migration notice
+
+            We found these secret references in this repository's workflow files:
+
+            ${{ steps.secret-references.outputs.secret_references }}
+
+            **All GitHub Actions secrets are scheduled for removal on Monday, December 7, 2026.**
+
+            If these references use secrets stored in GitHub, you must move them to Vault and update the workflows before that date. Follow the [Vault migration guidance](https://enghub.grafana-ops.net/docs/default/component/deployment-tools/platform/vault/#ci-secrets-for-repositories-outside-the-grafana-org).
+
+            > [!NOTE]
+            > If your workflow needs GitHub App authentication but you lack access to define the [GitHub App Token Broker (GATB) configuration](https://enghub.grafana-ops.net/docs/default/component/deployment-tools/platform/vault/github-app-token-broker/) in `grafana/deployment_tools` or register the App credentials in Vault, submit a [GitHub App Authentication Setup request](https://helpdesk2.grafana.com/submit/e537fff8-1871-4f32-bd7d-761d6cdef734) for assistance from Platform Productivity squad.
+
+      - name: Hide resolved secret migration notice
+        if: steps.secret-references.outcome == 'success' && steps.secret-references.outputs.secret_references == ''
+        continue-on-error: true
+        uses: int128/hide-comment-action@430b7e736ceb7372703a3022d1a5a26f07328207 # v1.78.0
+        with:
+          ends-with: "<!-- comment-action/github-actions-secret-removal-notice -->"
+
   zizmor:
     name: Run zizmor
 
