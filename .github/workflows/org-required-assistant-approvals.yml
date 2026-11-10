@@ -1,0 +1,98 @@
+name: Assistant approvals
+
+# Enforced org-wide via a ruleset required workflow pinned to this repo.
+# PRs authored by a Grafana Assistant bot need two distinct human approvals
+# (write access or higher) of the current head commit, so the person who
+# prompted the bot cannot approve and merge alone. Other PRs skip the job.
+# Ruleset workflows do not run on review events: re-run this check from the
+# PR's Checks tab after approvals land. In a merge queue, approvals are
+# re-checked when the PR is queued.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+jobs:
+  approvals:
+    name: Assistant requires two approvals
+    # Only take a runner for Assistant bot PRs (matched by bot user id:
+    # grafana-assistant-ops, grafana-assistant-mcp-dev, grafana-assistant).
+    # merge_group payloads have no PR author, so the script decides there.
+    if: >-
+      github.event_name == 'merge_group' ||
+      contains(fromJSON('[224985224, 218760508, 226711175]'), github.event.pull_request.user.id)
+    runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }} # grafana private repos use self-hosted runners; public repos use GitHub-hosted
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # read the PR and its reviews
+    steps:
+      # No checkout or execution of PR code is needed to inspect reviews.
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const assistantBotIds = new Set([
+              224985224, // grafana-assistant-ops[bot]
+              218760508, // grafana-assistant-mcp-dev[bot]
+              226711175, // grafana-assistant[bot]
+            ]);
+
+            let pull_number;
+            if (context.eventName === 'merge_group') {
+              // e.g. refs/heads/gh-readonly-queue/main/pr-123-<sha>
+              const match = /\/pr-(\d+)-[0-9a-f]+$/.exec(context.payload.merge_group.head_ref);
+              if (!match) {
+                core.setFailed(`Cannot find the PR number in ${context.payload.merge_group.head_ref}.`);
+                return;
+              }
+              pull_number = Number(match[1]);
+            } else {
+              pull_number = context.payload.pull_request.number;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+
+            if (!assistantBotIds.has(pr.user.id)) {
+              core.info('This PR does not require the assistant approval gate.');
+              return;
+            }
+
+            // Do not report a result for a newer head on an older event's check.
+            if (context.eventName === 'pull_request' && pr.head.sha !== context.payload.pull_request.head.sha) {
+              core.setFailed('The PR head changed. Use the check for the latest commit.');
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number, per_page: 100,
+            });
+            const latest = new Map();
+            for (const review of reviews.sort((a, b) => a.id - b.id)) {
+              if (!review.user || review.user.type !== 'User') continue;
+              if (review.user.id === pr.user.id) continue;
+              // Ordinary comments and pending reviews do not revoke approvals.
+              if (['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(review.state)) {
+                latest.set(review.user.id, review);
+              }
+            }
+
+            let approvals = 0;
+            for (const review of latest.values()) {
+              if (review.state !== 'APPROVED' || review.commit_id !== pr.head.sha) continue;
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner, repo, username: review.user.login,
+              });
+              // Legacy `permission` field: maintain maps to write.
+              if (['admin', 'write'].includes(data.permission)) approvals++;
+            }
+
+            const message = `Requires two human approvals of the current commit (${approvals}/2).`;
+            if (approvals < 2) {
+              core.setFailed(message);
+            } else {
+              core.info(message);
+            }
