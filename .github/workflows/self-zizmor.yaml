@@ -15,7 +15,8 @@ jobs:
     name: Check whether there are things to scan
     permissions:
       contents: read
-      # Remove after the secret migration grace period ends on December 7, 2026.
+      # TODO: Remove after the secret migration grace period ends on December 7, 2026.
+      # See: https://github.com/grafana/deployment_tools/issues/809938
       pull-requests: write
     runs-on: ${{ (!github.event.repository.private || github.repository_owner != 'grafana') && 'ubuntu-latest' || 'ubuntu-any-minus' }} # grafana private repos use self-hosted runners (any arch, medium or smaller); other orgs use ubuntu-latest
     outputs:
@@ -61,7 +62,7 @@ jobs:
       - name: Comment with secret migration notice
         if: steps.secret-references.outcome == 'success' && steps.secret-references.outputs.secret_references != ''
         continue-on-error: true
-        uses: int128/comment-action@2263c1a82c13c37672f725bcd07145530cd42579 # v1.69.0
+        uses: int128/comment-action@304df51b76a99f2ba948f8d780d789b5ecc22893 # v1.80.0
         with:
           update-if-exists: replace
           update-if-exists-key: github-actions-secret-removal-notice
