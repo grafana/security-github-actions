@@ -46,11 +46,17 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          reference="secrets[[:space:]]*(\.[[:space:]]*[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*['\"][A-Za-z_][A-Za-z0-9_]*['\"][[:space:]]*\])"
+          expression='(?s)\$\{\{(?:\x27(?:[^\x27]|\x27\x27)*\x27|(?!\}\}).)*\}\}'
+          reference="'(?:[^']|'')*'(*SKIP)(*F)|(?<![A-Za-z0-9_.-])secrets[[:space:]]*(\.[[:space:]]*[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*['\"][A-Za-z_][A-Za-z0-9_]*['\"][[:space:]]*\])"
           secret_references=''
           for file in .github/workflows/*.yml .github/workflows/*.yaml; do
             [[ -f $file && ! -L $file ]] || continue
-            matches=$(grep -Eio "$reference" "$file" || [[ $? -eq 1 ]])
+            # Match only the root secrets context inside expressions, skipping string literals.
+            matches=$(
+              { grep -Pzo "$expression" "$file" || [[ $? -eq 1 ]]; } |
+                { grep -Pzio "$reference" || [[ $? -eq 1 ]]; } |
+                tr '\n\0' ' \n'
+            )
             names=$(printf '%s\n' "$matches" | tr '[:lower:]' '[:upper:]' | sed 's/^SECRETS//; s/[^A-Z0-9_]//g; /^GITHUB_TOKEN$/d; /^$/d' | LC_ALL=C sort -u)
             formatted=''
             while IFS= read -r name; do
