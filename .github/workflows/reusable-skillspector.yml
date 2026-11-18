@@ -1,0 +1,348 @@
+name: Reusable SkillSpector static scan
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Select the runner label.
+        required: false
+        default: ubuntu-latest
+        type: string
+      min-confidence:
+        description: Set the minimum confidence for HIGH and CRITICAL findings.
+        required: false
+        default: 0.8
+        type: number
+      fail-on-findings:
+        description: Fail the scan when findings meet the policy.
+        required: false
+        default: true
+        type: boolean
+      comment-on-pr:
+        description: Update one pull request comment when findings meet the policy.
+        required: false
+        default: true
+        type: boolean
+    outputs:
+      finding-count:
+        description: The number of findings that meet the policy.
+        value: ${{ jobs.skillspector.outputs.finding-count }}
+      skill-count:
+        description: The number of skills in the pull request head.
+        value: ${{ jobs.skillspector.outputs.skill-count }}
+
+permissions: {}
+
+concurrency:
+  group: skillspector-${{ github.workflow }}-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skillspector:
+    name: Scan agent skills
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write # Update or remove one bot-authored pull request comment.
+    outputs:
+      finding-count: ${{ steps.scan.outputs.finding-count }}
+      skill-count: ${{ steps.scan.outputs.skill-count }}
+
+    steps:
+      - name: Check out the head tree
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          path: target
+          persist-credentials: false
+          lfs: true
+
+      - name: Check out the base tree
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          path: base
+          persist-credentials: false
+          lfs: true
+
+      - name: Check out SkillSpector
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: NVIDIA/SkillSpector
+          ref: 29b0dc8c39424e8e31ca055fa027adf8ba8f9650 # v2.9.6
+          path: .skillspector-runtime
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+          version: "0.11.26"
+          cache-dependency-glob: .skillspector-runtime/uv.lock
+
+      - name: Run SkillSpector
+        id: scan
+        env:
+          COMPARE_BASE: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && 'true' || 'false' }}
+          LANGCHAIN_TRACING_V2: "false"
+          LANGSMITH_TRACING: "false"
+          MIN_CONFIDENCE: ${{ inputs.min-confidence }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime="${GITHUB_WORKSPACE}/.skillspector-runtime"
+          uv sync --project "${runtime}" --locked --no-dev --python 3.12
+          scanner="${runtime}/.venv/bin/skillspector"
+          if [[ "$("${scanner}" --version)" != "SkillSpector v2.9.6" ]]; then
+            echo "::error::SkillSpector returned an unexpected version."
+            exit 2
+          fi
+          if ! jq -en --argjson value "${MIN_CONFIDENCE}" \
+            '$value >= 0.8 and $value <= 1' >/dev/null; then
+            echo "::error::The minimum confidence must be from 0.8 through 1."
+            exit 2
+          fi
+
+          work=$(mktemp -d "${RUNNER_TEMP}/skillspector.XXXXXX")
+          head_issues="${work}/head.json"
+          report="${GITHUB_WORKSPACE}/skillspector-results.json"
+          comment="${GITHUB_WORKSPACE}/skillspector-comment.md"
+
+          find -P target -type l -print -quit > "${work}/symlinks"
+          if [[ -s "${work}/symlinks" ]]; then
+            echo "::error::The repository contains a symbolic link."
+            exit 2
+          fi
+          git -C target ls-files --stage > "${work}/git-index"
+          if grep -q '^160000 ' "${work}/git-index"; then
+            echo "::error::The repository contains a Git submodule."
+            exit 2
+          fi
+
+          scan_tree() {
+            local root=$1
+            local output=$2
+            local manifests="${work}/manifests-$3"
+            local issues="${work}/issues-$3"
+            local skill_count=0
+
+            : > "${issues}"
+            find -P "${root}" \
+              \( -type d \( -name .git -o -name .venv -o -name __pycache__ -o -name node_modules \) -prune \) -o \
+              \( -type f -name SKILL.md -print0 \) \
+              | sort -z > "${manifests}"
+
+            while IFS= read -r -d '' manifest; do
+              local relative=${manifest#"${root}/"}
+              local skill_root
+              local skill_path
+              local raw_report="${work}/report-$3-${skill_count}.json"
+              local baseline="${work}/baseline-$3-${skill_count}.json"
+              local -a scan_args=(--no-llm --format json --output "${raw_report}")
+
+              if [[ "${relative}" == "SKILL.md" ]]; then
+                skill_root="."
+              else
+                skill_root=${relative%/SKILL.md}
+              fi
+              skill_path="${root}/${skill_root}"
+              skill_count=$((skill_count + 1))
+
+              if [[ "${COMPARE_BASE}" == "true" && -f "base/${skill_root}/SKILL.md" ]]; then
+                if ! "${scanner}" baseline "base/${skill_root}" \
+                  --no-llm \
+                  --output "${baseline}" \
+                  > "${work}/baseline-$3-${skill_count}.log" 2>&1; then
+                  echo "::error::SkillSpector could not create a base-tree baseline."
+                  exit 2
+                fi
+                scan_args+=(--baseline "${baseline}")
+              fi
+
+              set +e
+              "${scanner}" scan "${skill_path}" "${scan_args[@]}" \
+                > "${work}/scan-$3-${skill_count}.log" 2>&1
+              scanner_exit=$?
+              set -e
+
+              if [[ ${scanner_exit} -ne 0 && ${scanner_exit} -ne 1 ]]; then
+                echo "::error::SkillSpector could not scan a skill."
+                exit 2
+              fi
+              if ! jq -e --arg skill_root "${skill_root}" '
+                .execution_successful == true and
+                .analysis_completeness.execution_successful == true and
+                .metadata.skillspector_version == "2.9.6" and
+                .metadata.llm_requested == false and
+                .metadata.meta_analysis_applied == false and
+                (.analysis_completeness.entirely_uninspected_files // 0) == 0 and
+                (.analysis_completeness.partially_inspected_files // 0) == 0 and
+                ((.analysis_completeness.ledger_exceptions // []) | length) == 0 and
+                (.issues | type == "array") and
+                all(.issues[]?; (.confidence | type) == "number" and .confidence >= 0 and .confidence <= 1) and
+                all(
+                  (.analysis_completeness.scope_exclusions // [])[];
+                  $skill_root == "." and
+                  .reason_code == "excluded_directory" and
+                  .path == ".git/"
+                )
+              ' "${raw_report}" >/dev/null; then
+                echo "::error::SkillSpector returned an invalid report."
+                exit 2
+              fi
+
+              jq -c --arg skill_root "${skill_root}" '
+                def repo_file($root):
+                  (.location.file // "SKILL.md") as $file
+                  | (if $root == "." then $file else "\($root)/\($file)" end)
+                  | sub("^\\./"; "");
+                .issues[]?
+                | . + {
+                    skill_root: $skill_root,
+                    repo_file: repo_file($skill_root)
+                  }
+              ' "${raw_report}" >> "${issues}"
+            done < "${manifests}"
+
+            jq -s 'unique_by([.id, .severity, .repo_file, .finding])' \
+              "${issues}" > "${output}"
+            SCANNED_SKILL_COUNT=${skill_count}
+          }
+
+          scan_tree target "${head_issues}" head
+          head_skill_count=${SCANNED_SKILL_COUNT}
+
+          jq -n \
+            --slurpfile head "${head_issues}" \
+            --argjson compared_with_base "${COMPARE_BASE}" \
+            --argjson min_confidence "${MIN_CONFIDENCE}" '
+              [
+                  ($head[0] // [])[]
+                  | ((.severity // "") | ascii_upcase) as $severity
+                  | select(($severity == "HIGH" or $severity == "CRITICAL") and .confidence >= $min_confidence)
+                  | {
+                      id: (.id // "unknown"),
+                      severity: $severity,
+                      confidence,
+                      skill_root,
+                      location: {
+                        file: .repo_file,
+                        start_line: (.location.start_line // 1),
+                        end_line: (.location.end_line // .location.start_line // 1)
+                      }
+                    }
+                ]
+              | sort_by(.severity != "CRITICAL", -.confidence, .location.file)
+              | {
+                  scanner_version: "2.9.6",
+                  no_llm: true,
+                  compared_with_base: $compared_with_base,
+                  finding_count: length,
+                  findings: .
+                }
+            ' > "${report}"
+
+          finding_count=$(jq -r '.finding_count' "${report}")
+          if [[ ${finding_count} -eq 0 ]]; then
+            printf '%s\n' \
+              '## SkillSpector static scan' \
+              '' \
+              'SkillSpector found no high-confidence HIGH or CRITICAL findings.' \
+              > "${comment}"
+          else
+            finding_word="findings"
+            if [[ ${finding_count} -eq 1 ]]; then
+              finding_word="finding"
+            fi
+            {
+              echo '## SkillSpector review'
+              echo
+              echo "SkillSpector found ${finding_count} high-confidence ${finding_word} with HIGH or CRITICAL severity."
+              echo
+              jq -r '
+                def clean:
+                  tostring
+                  | gsub("[\\r\\n\\t]"; " ")
+                  | gsub("@"; "@\u200b")
+                  | gsub("[\\[\\]`<>]"; "");
+                .findings[:20][]
+                | "- **\(.severity | clean) \(.id | clean)** (\((.confidence * 100) | round)% confidence) at `\(.location.file | clean):\(.location.start_line)`"
+              ' "${report}"
+              if [[ ${finding_count} -gt 20 ]]; then
+                echo
+                echo "The artifact contains $((finding_count - 20)) additional findings."
+              fi
+              echo
+              echo 'Static findings are not confirmed vulnerabilities. Review each finding before merge.'
+              echo
+              echo '<!-- skillspector-static-scan -->'
+            } > "${comment}"
+          fi
+
+          cat "${comment}" >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo "finding-count=${finding_count}"
+            echo "skill-count=${head_skill_count}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Upload the sanitized scan report
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        with:
+          name: skillspector-static-report
+          path: |
+            skillspector-results.json
+            skillspector-comment.md
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Update the pull request comment
+        if: >-
+          ${{
+            github.event_name == 'pull_request' &&
+            inputs.comment-on-pr &&
+            steps.scan.outputs.finding-count != '0' &&
+            github.event.pull_request.head.repo.full_name == github.repository
+          }}
+        continue-on-error: true
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2.8.2
+        with:
+          message-path: skillspector-comment.md
+          message-id: skillspector-static-scan
+
+      - name: Remove the resolved pull request comment
+        if: >-
+          ${{
+            github.event_name == 'pull_request' &&
+            inputs.comment-on-pr &&
+            steps.scan.outputs.finding-count == '0' &&
+            github.event.pull_request.head.repo.full_name == github.repository
+          }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          comment_ids=$(mktemp)
+          gh api --paginate "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- skillspector-static-scan -->")) | .id' \
+            > "${comment_ids}"
+          while IFS= read -r comment_id; do
+            if [[ -n "${comment_id}" ]]; then
+              gh api --method DELETE "repos/${REPOSITORY}/issues/comments/${comment_id}"
+            fi
+          done < "${comment_ids}"
+
+      - name: Apply the merge policy
+        if: inputs.fail-on-findings && steps.scan.outputs.finding-count != '0'
+        env:
+          FINDING_COUNT: ${{ steps.scan.outputs.finding-count }}
+        run: |
+          echo "::error::SkillSpector found ${FINDING_COUNT} high-confidence HIGH or CRITICAL findings."
+          exit 1
