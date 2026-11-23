@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      actions: read # observe exporter reports; never changes the approval threshold
       pull-requests: read # read the PR and its reviews
     steps:
       # No checkout or execution of PR code is needed to inspect reviews.
@@ -98,3 +99,140 @@ jobs:
             } else {
               core.info(message);
             }
+
+      # Reporting-only rollout. These steps deliberately run even when the
+      # approval gate fails, and cannot change its two-approval requirement.
+      - name: Find resource change observation
+        id: resource-report
+        if: ${{ !cancelled() && github.repository == 'grafana/deployment_tools' }}
+        continue-on-error: true
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          retries: 3
+          script: |
+            const { owner, repo } = context.repo;
+            const unavailable = (reason) => core.info(`Resource observation unavailable: ${reason}. Two approvals remain required.`);
+            let number = context.payload.pull_request?.number;
+            if (context.eventName === 'merge_group') {
+              const match = /\/pr-(\d+)-[0-9a-f]+$/.exec(context.payload.merge_group.head_ref);
+              if (!match) return unavailable('unrecognized merge queue ref');
+              number = Number(match[1]);
+            }
+            if (`${owner}/${repo}` !== 'grafana/deployment_tools' || !number) return;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            if (![224985224, 218760508, 226711175].includes(pr.user.id)) return;
+            if (pr.head.repo?.full_name !== 'grafana/deployment_tools') return unavailable('fork PR');
+            if (context.eventName === 'pull_request' && pr.head.sha !== context.payload.pull_request.head.sha) {
+              return unavailable('PR head changed');
+            }
+
+            // Rendering does not cover Terraform, scripts, workflow changes,
+            // or team access metadata. Never call such a mixed PR a candidate.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: number, per_page: 100,
+            });
+            if (files.length === 0 || files.length !== pr.changed_files || files.length >= 3000 || files.some(file =>
+              file.status !== 'modified' ||
+              !/^ksonnet\/(environments|lib)\/.+\.(jsonnet|libsonnet)$/.test(file.filename) ||
+              /^ksonnet\/lib\/meta\//.test(file.filename)
+            )) return unavailable('source changes outside the supported render scope');
+
+            // Take the newest matching run, including incomplete/failed runs;
+            // never fall back to an older successful render of the same head.
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id: 'kube-manifests-exporter.yaml',
+              event: 'pull_request', head_sha: pr.head.sha, per_page: 100,
+            });
+            const run = data.workflow_runs
+              .filter(run => run.head_sha === pr.head.sha && run.event === 'pull_request' &&
+                run.pull_requests?.some(pull => pull.number === number))
+              .sort((a, b) => b.id - a.id)[0];
+            if (!run || run.path !== '.github/workflows/kube-manifests-exporter.yaml' ||
+                run.head_repository?.full_name !== 'grafana/deployment_tools' ||
+                run.status !== 'completed' || run.conclusion !== 'success' ||
+                !run.pull_requests.some(pull => pull.number === number &&
+                  pull.head.sha === pr.head.sha && pull.base.sha === pr.base.sha)) {
+              return unavailable('no successful exporter run for the current head and base');
+            }
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              owner, repo, run_id: run.id, per_page: 100,
+            });
+            const matching = artifacts.filter(artifact =>
+              artifact.name === `assistant-resource-change-report-${run.run_attempt}`);
+            if (matching.length !== 1) return unavailable('missing or ambiguous report');
+            const artifact = matching[0];
+            if (artifact.expired || artifact.size_in_bytes <= 0 || artifact.size_in_bytes > 65536 ||
+                artifact.workflow_run?.id !== run.id || artifact.workflow_run?.head_sha !== pr.head.sha) {
+              return unavailable('invalid artifact metadata');
+            }
+            core.setOutput('artifact-id', String(artifact.id));
+            core.setOutput('run-id', String(run.id));
+            core.setOutput('expected', JSON.stringify({
+              pullNumber: number, sourceHeadSha: pr.head.sha, sourceBaseSha: pr.base.sha,
+              runId: run.id, runAttempt: run.run_attempt,
+            }));
+
+      - name: Download resource change observation
+        id: download-resource-report
+        if: ${{ !cancelled() && steps.resource-report.outputs.artifact-id != '' }}
+        continue-on-error: true
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          artifact-ids: ${{ steps.resource-report.outputs.artifact-id }}
+          run-id: ${{ steps.resource-report.outputs.run-id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/assistant-resource-report-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Summarize resource change observation
+        if: ${{ !cancelled() && steps.download-resource-report.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          EXPECTED_REPORT: ${{ steps.resource-report.outputs.expected }}
+          REPORT_DIRECTORY: ${{ runner.temp }}/assistant-resource-report-${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const directory = process.env.REPORT_DIRECTORY;
+            const expected = JSON.parse(process.env.EXPECTED_REPORT);
+            const entries = fs.readdirSync(directory);
+            if (entries.length !== 1 || entries[0] !== 'assistant-resource-change-report.json') {
+              throw new Error('Unexpected report archive contents');
+            }
+            const file = path.join(directory, entries[0]);
+            const stat = fs.lstatSync(file);
+            if (!stat.isFile() || stat.size > 16384) throw new Error('Invalid report file');
+            const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (report.schemaVersion !== 1 || report.policy !== 'assistant-resource-increases-v1' ||
+                report.repository !== 'grafana/deployment_tools' ||
+                !Object.entries(expected).every(([key, value]) => report[key] === value) ||
+                !['sourceHeadSha', 'sourceBaseSha', 'renderSourceSha', 'manifestBaseSha', 'manifestHeadSha']
+                  .every(key => /^[0-9a-f]{40}$/.test(report[key])) ||
+                typeof report.resourceIncreasesOnly !== 'boolean' ||
+                !Number.isSafeInteger(report.increases) || report.increases < 0 ||
+                (report.resourceIncreasesOnly && (report.increases === 0 || report.manifestBaseSha === report.manifestHeadSha))) {
+              throw new Error('Report schema or revision mismatch');
+            }
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: expected.pullNumber });
+            if (pr.head.sha !== expected.sourceHeadSha || pr.base.sha !== expected.sourceBaseSha) {
+              throw new Error('PR changed while reading the report');
+            }
+            // Recheck the run attempt after download: an in-flight rerun must
+            // not leave an observation from its preceding successful attempt.
+            const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: expected.runId });
+            if (run.run_attempt !== expected.runAttempt || run.status !== 'completed' || run.conclusion !== 'success') {
+              throw new Error('Exporter run changed while reading the report');
+            }
+            const message = report.resourceIncreasesOnly
+              ? `Candidate for one approval: ${report.increases} rendered resource increase(s).`
+              : 'Not a candidate for one approval: the rendered comparison is not exclusively supported resource increases.';
+            core.info(`${message} Reporting only; two approvals remain required.`);
+            await core.summary.addHeading('Assistant resource-change observation')
+              .addRaw(`${message} **Reporting only: two human approvals remain required.**\n\n`)
+              .addRaw(`Source commit: \`${expected.sourceHeadSha}\`.\n\n`)
+              .addLink('Exporter run', `https://github.com/grafana/deployment_tools/actions/runs/${expected.runId}`)
+              .addRaw(' · ')
+              .addLink('Rendered comparison', `https://github.com/grafana/kube-manifests/compare/${report.manifestBaseSha}...${report.manifestHeadSha}`)
+              .write();

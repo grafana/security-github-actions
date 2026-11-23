@@ -1,0 +1,26 @@
+name: Test Assistant approval workflow
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/org-required-assistant-approvals.yml
+      - .github/workflows/test-assistant-approvals.yml
+      - tests/assistant-approvals.test.cjs
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/org-required-assistant-approvals.yml
+      - .github/workflows/test-assistant-approvals.yml
+      - tests/assistant-approvals.test.cjs
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: node --test tests/assistant-approvals.test.cjs
