@@ -31,7 +31,7 @@ jobs:
       pull-requests: read # read the PR and its reviews
     steps:
       # No checkout or execution of PR code is needed to inspect reviews.
-      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           # A transient API error would fail the check and block merge queues.
           retries: 3
