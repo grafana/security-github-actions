@@ -70,7 +70,7 @@ jobs:
       - name: Comment with secret migration notice
         if: steps.secret-references.outcome == 'success' && steps.secret-references.outputs.secret_references != ''
         continue-on-error: true
-        uses: int128/comment-action@304df51b76a99f2ba948f8d780d789b5ecc22893 # v1.80.0
+        uses: int128/comment-action@f48c228ccb7b328203774301f738243579d65e9c # v1.81.0
         with:
           update-if-exists: replace
           update-if-exists-key: github-actions-secret-removal-notice
